@@ -1,0 +1,70 @@
+Web Modeling Editor
+===================
+
+One of the practical ways to use BESSER is through the Web Modeling Editor, where you can rapidly 
+design :doc:`B-UML <../buml_language>` models and use the :doc:`BESSER code generators <../generators>`.
+
+.. note::
+   The BESSER Web Modeling Editor is now live and available at
+   `editor.besser-pearl.org <https://editor.besser-pearl.org>`_.
+   You can access and use it directly in your browser without installing anything locally.
+
+The full Web Modeling Editor documentation is published as a separate subproject:
+`BESSER Web Modeling Editor documentation <https://besser.readthedocs.io/projects/besser-web-modeling-editor/en/latest/>`_.
+For contributor workflows like adding a new diagram type, see
+`Adding a New Diagram Type <https://besser.readthedocs.io/projects/besser-web-modeling-editor/en/latest/contributing/new-diagram-guide/index.html>`_.
+
+.. image:: ./img/besser_new.gif
+   :width: 900
+   :alt: BESSER Web Modeling Editor interface
+   :align: center
+
+The editor's source code is available in the
+`BESSER-WEB-MODELING-EDITOR GitHub repository <https://github.com/BESSER-PEARL/BESSER-WEB-MODELING-EDITOR>`_.
+The frontend is vendored into this repository as a git submodule at
+``besser/utilities/web_modeling_editor/frontend``, while the backend services live here under
+``besser/utilities/web_modeling_editor/backend``.
+
+Class Diagram Notation
+----------------------
+
+Class diagrams can be rendered in two equivalent notations, chosen from
+**Project Settings → Display → Class Diagram Notation**. The underlying B-UML
+model is identical in both cases — the notation only affects how the diagram is
+drawn, so switching is lossless.
+
+**UML** (default) — standard UML class notation with visibility prefixes,
+``{id}`` markers on identifier attributes, and ``min..max`` multiplicities.
+
+.. image:: ./img/class_diagram_uml.png
+   :width: 800
+   :alt: Library model rendered in UML notation
+   :align: center
+
+**ER** (Chen-style) — entity/relationship flavor aimed at users with a database
+modeling background. Identifier attributes (``is_id``) are underlined, the
+methods compartment is hidden, associations are drawn as named diamonds, and
+multiplicities are shown as ``(min,max)`` cardinality pairs (with ``*`` rendered
+as ``N``). Inheritance relationships keep their UML rendering since there is no
+direct ER equivalent.
+
+.. image:: ./img/class_diagram_er.png
+   :width: 800
+   :alt: Library model rendered in Chen-style ER notation
+   :align: center
+
+Backend API Reference
+---------------------
+
+The backend services that power code generation, validation, and deployment are
+documented separately. If you are integrating with the backend API or extending it,
+see:
+
+.. toctree::
+   :maxdepth: 1
+
+   web_editor_backend
+
+.. note::
+   The BESSER Web Modeling Editor is based on a fork of the
+   `Apollon project <https://apollon-library.readthedocs.io/en/latest/>`_, a UML modeling editor.

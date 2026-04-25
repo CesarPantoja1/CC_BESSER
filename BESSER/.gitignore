@@ -1,0 +1,49 @@
+__pycache__/
+.pytest_cache/
+/.idea/
+
+# virtual env
+Pipfile
+Pipfile.lock
+besser_venv/
+venv/
+
+# Environment files (keep .env.example committed, ignore actual .env files)
+.env
+.env.local
+.env.prod
+besser/utilities/web_modeling_editor/frontend/packages/webapp/webpack/.env
+besser/utilities/web_modeling_editor/frontend/packages/webapp/webpack/.env.local
+besser/utilities/web_modeling_editor/frontend/packages/webapp/webpack/.env.prod
+
+# package
+/dist/
+buml.egg-info/
+
+# Sphinx documentation
+docs/_build/
+
+# Build
+build
+**/besser.egg-info/**
+
+# ANTLR
+**/.antlr/**
+besser/.idea/workspace.xml
+*.iml
+.idea/inspectionProfiles/profiles_settings.xml
+*.xml
+
+# Backend
+besser/utilities/web_modeling_editor/backend/output
+besser/utilities/web_modeling_editor/backend/feedback_data
+
+# pylint
+.pylintrc
+
+generated/*
+.agents/
+.claude/
+skills-lock.json
+scripts/
+New folder/*

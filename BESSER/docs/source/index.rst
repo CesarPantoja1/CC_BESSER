@@ -1,0 +1,75 @@
+Welcome to BESSER's Documentation
+=================================
+
+.. note::
+   Checkout the latest repository: `BESSER-Dataset <https://github.com/BESSER-PEARL/BESSER-Dataset>`_
+   The B-UML Dataset is a large-scale dataset containing 5,000+ B-UML models for research in modeling languages and AI-assisted modeling.
+
+**BESSER** is a `low-modeling <https://modeling-languages.com/welcome-to-the-low-modeling-revolution/>`_
+`low-code <https://modeling-languages.com/low-code-vs-model-driven/>`_ open-source platform built on top
+of our Python-based personal interpretation of a "Universal Modeling Language" (yes, heavily inspired and
+a simplified version of the better known UML, the Unified Modeling Language).
+
+.. note::
+   BESSER is funded thanks to an `FNR Pearl grant <https://modeling-languages.com/a-smart-low-code-platform-for-smart-software-in-luxembourg-goodbye-barcelona/>`_
+   led by the `Luxembourg Institute of Science and Technology <https://www.list.lu/>`_ with the participation
+   of the `Snt/University of Luxembourg <https://www.uni.lu/snt-en/>`_ and open to all your contributions!
+
+BESSER enables users to model, generate, personalize and deploy smart and complex software systems. BESSER is
+based around our B-UML language and a number of generators built on top of it (See the high-level architecture below).
+
+.. image:: img/blc.png
+  :width: 800
+  :alt: B-UML metamodel
+  :align: center
+
+You'll find here all the necessary information about the B-UML language (to model the problem domain) and the
+different code generators to produce a deployable solution. You could even build your own code generator for
+a target technology.
+
+.. note::
+   This repository hosts the backend of the BESSER platform: the B-UML metamodel,
+   generators, utilities, and services that the web modeling editor consumes.
+   The editor's frontend is maintained in the `BESSER-WEB-MODELING-EDITOR <https://github.com/BESSER-PEARL/BESSER-WEB-MODELING-EDITOR>`_
+   project, included here only as a submodule (``besser/utilities/web_modeling_editor/frontend``) for local deployments.
+
+Getting Started
+---------------
+
+Choose your path depending on what you want to do:
+
+**I want to design models visually**
+   Go to `editor.besser-pearl.org <https://editor.besser-pearl.org>`_ and start modeling
+   immediately. See :doc:`web_editor` for details.
+
+**I want to use BESSER as a Python library**
+   Install with ``pip install besser``, then follow the :doc:`installation` guide. Start
+   with the :doc:`buml_language` to learn how to define models in Python, then pick a
+   :doc:`generator <generators>` to produce code.
+
+**I want to contribute to the project**
+   Read the :doc:`contributing/index` section for onboarding, coding standards, and
+   how to add new generators or model types.
+
+**I want to build my own code generator**
+   See :doc:`generators/build_generator` for a step-by-step guide to creating and
+   registering a custom generator.
+
+Contents
+--------
+
+.. toctree::
+   :maxdepth: 2
+
+   installation
+   web_editor
+   buml_language
+   generators
+   utilities
+   examples
+   troubleshooting
+   api
+   releases
+   contributing/index
+   about
+

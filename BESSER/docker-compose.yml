@@ -1,0 +1,58 @@
+services:
+  besser-wme-backend:
+    image: artefacts.list.lu/besser/web_modeling_editor/backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./:/app
+    working_dir: /app/besser
+    env_file:
+      - ./.env
+    environment:
+      - PYTHONPATH=/app
+      - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI:-http://localhost:9000/besser_api/github/auth/callback}
+    command: python -m besser.utilities.web_modeling_editor.backend.backend
+    networks:
+      - besser_network
+
+  besser-wme-frontend:
+    image: artefacts.list.lu/besser/web_modeling_editor/frontend:latest
+    build:
+      context: ./besser/utilities/web_modeling_editor/frontend
+      dockerfile: Dockerfile
+    container_name: besser-wme-frontend
+    env_file:
+      - ./besser/utilities/web_modeling_editor/frontend/packages/webapp/webpack/.env
+    restart: always
+    networks:
+      - besser_network
+    ports:
+      - "8080:8080"
+
+  # besser-wme-modeling-agent:
+  #   image: artefacts.list.lu/besser/web_modeling_editor/modeling_agent:latest
+  #   build:
+  #     context: ./besser/utilities/web_modeling_editor/frontend/ModelingAgent
+  #     dockerfile: Dockerfile
+  #   container_name: besser-wme-modeling-agent
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #   ports:
+  #     - "8765:8765"
+  #   restart: unless-stopped
+  #   networks:
+  #     - besser_network
+  #   depends_on:
+  #     - besser_redis
+
+volumes: {}
+
+networks:
+  besser_network:
+    name: besser_network
+    driver: bridge

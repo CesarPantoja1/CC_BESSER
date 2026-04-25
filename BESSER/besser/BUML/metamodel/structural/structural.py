@@ -1,0 +1,2255 @@
+from abc import ABC
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Union, List, TYPE_CHECKING
+import keyword
+import logging
+import time
+
+if TYPE_CHECKING:
+    from besser.BUML.metamodel.state_machine import StateMachine
+    from besser.BUML.metamodel.quantum import QuantumCircuit
+
+# constant
+UNLIMITED_MAX_MULTIPLICITY = 9999
+
+class Element(ABC):
+    """Element is the Superclass of all structural model elements.
+
+    Args:
+        timestamp (datetime): Object creation datetime (default is current time).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+        uncertainty (float): Indicates the uncertainty level of the element as a probability between 0 and 1 (0.0 as default).
+
+    Attributes:
+        timestamp (datetime): Object creation datetime (default is current time).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+        uncertainty (float): Indicates the uncertainty level of the element as a probability between 0 and 1 (0.0 as default).
+    """
+
+    def __init__(self, timestamp: datetime = None, is_derived: bool = False, uncertainty: float = 0.0):
+        self.timestamp: datetime = timestamp if timestamp is not None else datetime.now() + \
+                         timedelta(microseconds=(time.perf_counter_ns() % 1_000_000) / 1000)
+        self.is_derived: bool = is_derived
+        self.uncertainty: float = uncertainty
+
+    @property
+    def timestamp(self) -> datetime:
+        """datetime: Get the timestamp of the element."""
+        return self.__timestamp
+
+    @timestamp.setter
+    def timestamp(self, timestamp: datetime):
+        """datetime: Set the timestamp of the element."""
+        self.__timestamp = timestamp
+
+    @property
+    def is_derived(self) -> bool:
+        """bool: Get whether the element is derived."""
+        return self.__is_derived
+
+    @is_derived.setter
+    def is_derived(self, is_derived: bool):
+        """bool: Set whether the element is derived."""
+        self.__is_derived = is_derived
+
+    @property
+    def uncertainty(self) -> float:
+        """float: Get the uncertainty level of the element as a probability between 0 and 1."""
+        return self.__uncertainty
+
+    @uncertainty.setter
+    def uncertainty(self, uncertainty: float):
+        """
+        float: Set the uncertainty level of the element as a probability between 0 and 1.
+
+        Raises:
+            ValueError: If the uncertainty value is not between 0 and 1 inclusive.
+        """
+        if not 0 <= uncertainty <= 1:
+            raise ValueError("Uncertainty must be a probability between 0 and 1 inclusive")
+        self.__uncertainty = float(uncertainty)
+
+class Metadata(Element):
+    """The Metadata class stores additional information about named elements.
+
+    Args:
+        description (str): Description of the element (None as default).
+        uri (str): Uniform resource identifier for the element (None as default).
+        synonyms (List[str]): List of synonyms of the element (None as default).
+        icon (str): Icon representing the element (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+
+    Attributes:
+        description (str): Description of the element (None as default).
+        uri (str): Uniform resource identifier for the element (None as default).
+        synonyms (List[str]): List of synonyms of the element (None as default).
+        icon (str): Icon representing the element (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+    """
+
+    def __init__(self, description: str = None, uri: str = None, synonyms: List[str] = None, icon: str = None,
+                 timestamp: datetime = None):
+        super().__init__(timestamp)
+        self.description: str = description
+        self.uri: str = uri
+        self.synonyms: List[str] = synonyms
+        self.icon: str = icon
+
+    @property
+    def description(self) -> str:
+        """str: Get the description of the metadata."""
+        return self.__description
+
+    @description.setter
+    def description(self, description: str):
+        """str: Set the description of the metadata."""
+        self.__description = description
+
+    @property
+    def uri(self) -> str:
+        """str: Get the URI of the metadata."""
+        return self.__uri
+
+    @uri.setter
+    def uri(self, uri: str):
+        """str: Set the URI of the metadata."""
+        self.__uri = uri
+
+    @property
+    def synonyms(self) -> List[str]:
+        """List[str]: Get the list of synonyms of the metadata."""
+        return self.__synonyms
+
+    @synonyms.setter
+    def synonyms(self, synonyms: List[str]):
+        """List[str]: Set the list of synonyms of the metadata."""
+        self.__synonyms = synonyms
+
+    @property
+    def icon(self) -> str:
+        """str: Get the icon representing the metadata."""
+        return self.__icon
+
+    @icon.setter
+    def icon(self, icon: str):
+        """str: Set the icon representing the metadata."""
+        self.__icon = icon
+
+    def __repr__(self):
+        return f"Metadata({self.description}, {self.uri}, {self.synonyms}, {self.icon}, {self.timestamp})"
+
+
+class NamedElement(Element):
+    """NamedElement represent a structural element with a name.
+
+    Args:
+        name (str): The name of the named element
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the named element (None as default).
+        visibility (str): Determines the kind of visibility of the named element (public as default).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): The name of the named element
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the named element (None as default).
+        visibility: Determines the kind of visibility of the named element (public as default).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, timestamp: datetime = None, metadata: Metadata = None,
+                 visibility: str = "public", is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(timestamp, is_derived, uncertainty)
+        self.name: str = name
+        self.metadata: Metadata = metadata
+        self.visibility: str = visibility
+
+
+    @property
+    def name(self) -> str:
+        """str: Get the name of the named element."""
+        return self.__name
+
+    @name.setter
+    def name(self, name: str):
+        """
+        str: Set the name of the named element.
+
+        Raises:
+            ValueError: If the name is None, empty, whitespace-only, or contains invalid characters (spaces, hyphens, etc.).
+        """
+        if name is None:
+            raise ValueError("Name cannot be None.")
+        if not isinstance(name, str) or name.strip() == "":
+            raise ValueError("Name cannot be empty or whitespace-only.")
+        if ' ' in name:
+            raise ValueError(f"'{name}' is invalid. Name cannot contain spaces.")
+        if '-' in name:
+            raise ValueError(f"'{name}' is invalid. Hyphens are not allowed; use '_' instead.")
+        if keyword.iskeyword(name):
+            logging.warning(f"'{name}' is a Python keyword. This may cause issues in generated code.")
+        self.__name = name
+
+    @property
+    def visibility(self) -> str:
+        """str: Get the visibility of the named element."""
+        return self.__visibility
+
+    @visibility.setter
+    def visibility(self, visibility: str):
+        """
+        str: Set the visibility of the named element.
+
+        Raises:
+            ValueError: If the visibility provided is none of these: public,
+            private, protected, or package.
+        """
+        if visibility not in ['public', 'private', 'protected', 'package']:
+            raise ValueError("Invalid value of visibility")
+        self.__visibility = visibility
+
+    @property
+    def metadata(self) -> Metadata:
+        """Metadata: Get the metadata of the named element."""
+        return self.__metadata
+
+    @metadata.setter
+    def metadata(self, metadata: Metadata):
+        """Metadata: Set the metadata of the named element."""
+        self.__metadata = metadata
+
+class Type(NamedElement):
+    """Type is the Superclass of classes and data types in the model.
+
+    Args:
+        name (str): The name of the Type.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the type (None as default).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the Type.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the type (None as default).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, timestamp: datetime = None, metadata: Metadata = None,
+                is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+
+    def __repr__(self):
+        return f"Type({self.name}, {self.timestamp}, {self.metadata})"
+
+class DataType(Type):
+    """Represents a data type.
+
+    This class inherits from NamedElement and is used to model data types.
+
+    Args:
+        name (str): The name of the data type.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the data type (None as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the data type.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the data type (None as default).
+    """
+
+    def __repr__(self):
+        return f"DataType({self.name})"
+
+class PrimitiveDataType(DataType):
+    """Class representing a primitive data type.
+
+    This class is a subclass of DataType and is used to represent primitive data types
+    with a specified name.
+
+    Args:
+        name (str): The name of the primitive data type.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the primitive data type (None as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the primitive data type.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the primitive data type (None as default).
+    """
+
+    @NamedElement.name.setter
+    def name(self, name: str):
+        """
+        str: Set the name of the PrimitiveDataType.
+
+        Raises:
+            ValueError: If an invalid primitive data type is provided.
+                        Allowed values are int, float, str, bool, time, date,
+                        datetime, timedelta, and any.
+        """
+        if name not in ['int', 'float', 'str', 'bool', 'time', 'date', 'datetime', 'timedelta', 'any']:
+            raise ValueError("Invalid primitive data type")
+        super(PrimitiveDataType, PrimitiveDataType).name.fset(self, name)
+
+    def __repr__(self):
+        return f"PrimitiveDataType({self.name}, {self.timestamp}, {self.metadata})"
+
+# Define instances of PrimitiveDataType
+StringType = PrimitiveDataType("str")
+IntegerType = PrimitiveDataType("int")
+FloatType = PrimitiveDataType("float")
+BooleanType = PrimitiveDataType("bool")
+TimeType = PrimitiveDataType("time")
+DateType = PrimitiveDataType("date")
+DateTimeType = PrimitiveDataType("datetime")
+TimeDeltaType = PrimitiveDataType("timedelta")
+AnyType = PrimitiveDataType("any")
+data_types = {StringType, IntegerType, FloatType, BooleanType,
+              TimeType, DateType, DateTimeType, TimeDeltaType, AnyType}
+
+
+class MethodImplementationType(Enum):
+    """Enumeration representing the type of implementation for a method.
+
+    Attributes:
+        NONE: No implementation (abstract method or signature only).
+        CODE: Implementation provided as Python code string.
+        BAL: Implementation provided as BESSER Action Language code string.
+        STATE_MACHINE: Implementation defined by a state machine.
+        QUANTUM_CIRCUIT: Implementation defined by a quantum circuit.
+    """
+    NONE = "none"
+    CODE = "code"
+    BAL = "besser_action_language"
+    STATE_MACHINE = "state_machine"
+    QUANTUM_CIRCUIT = "quantum_circuit"
+
+
+class EnumerationLiteral(NamedElement):
+    """Class representing an enumeration literal.
+
+    This class is a subclass of NamedElement and is used to represent individual
+    literals within an enumeration.
+
+    Args:
+        name (str): The name of the enumeration literal.
+        owner (DataType): The owner data type of the enumeration literal (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the literal (None as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the enumeration literal.
+        owner (DataType): Represents the owner data type of the enumeration literal (None as default).
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the literal (None as default).
+    """
+
+    def __init__(self, name: str, owner: DataType=None, timestamp: datetime = None, metadata: Metadata = None, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, uncertainty=uncertainty)
+        self.owner: DataType = owner
+
+    @property
+    def owner(self) -> DataType:
+        """Datatype: Get the owner."""
+        return self.__owner
+
+    @owner.setter
+    def owner(self, owner: DataType):
+        """
+        DataType: Set the owner.
+
+        Raises:
+            ValueError: If the owner is not an enumeration.
+        """
+        if isinstance(owner, PrimitiveDataType):
+            raise ValueError("Invalid owner")
+        self.__owner = owner
+
+    def __repr__(self):
+        return f"EnumerationLiteral({self.name}, {self.owner}, {self.timestamp}, {self.metadata})"
+
+class Enumeration(DataType):
+    """Class representing an enumeration.
+
+    This class is a subclass of DataType and is used to represent enumerations
+    with a specified name and a set of enumeration literals.
+
+    Args:
+        name (str): The name of the enumeration data type.
+        literals (set[EnumerationLiteral]): Set of enumeration literals associated with the
+                enumeration (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the enumeration (None as default).
+
+    Attributes:
+        name (str): Inherited from DataType, represents the name of the enumeration.
+        literals (set[EnumerationLiteral]): Represents a set of enumeration literals associated
+                with the enumeration (None as default).
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is
+                current time).
+        metadata (Metadata): Metadata information for the enumeration (None as default).
+    """
+
+    def __init__(self, name: str, literals: set[EnumerationLiteral] = None, timestamp: datetime = None,
+                 metadata: Metadata = None, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, uncertainty=uncertainty)
+        self.literals: set[EnumerationLiteral] = literals if literals is not None else set()
+
+    @property
+    def literals(self) -> set[EnumerationLiteral]:
+        """set[EnumerationLiteral]: Get the set of literals."""
+        return self.__literals
+
+    @literals.setter
+    def literals(self, literals: set[EnumerationLiteral]):
+        """
+        DataType: Set the literals.
+
+        Raises:
+            ValueError: if two literals have the same name.
+        """
+        if literals is not None:
+            names = [literal.name for literal in literals]
+            if len(names) != len(set(names)):
+                raise ValueError("An enumeration cannot have two literals with the same name")
+            for literal in literals:
+                literal.owner = self
+            self.__literals = literals
+        else:
+            self.__literals = set()
+
+    def add_literal(self, literal: EnumerationLiteral):
+        """
+        Add an enumeration literal to the set.
+
+        Raises:
+            ValueError: if the enumeration literal name already exist.
+        """
+        if self.literals is not None:
+            if literal.name in [literal.name for literal in self.literals]:
+                raise ValueError(f"An enumeration cannot have two literals with the same name: '{literal.name}'")
+        literal.owner = self
+        self.literals.add(literal)
+
+    def __getattr__(self, name):
+        try:
+            literals = object.__getattribute__(self, "_Enumeration__literals")
+        except AttributeError:
+            raise AttributeError(name)
+        for literal in literals:
+            if literal.name == name:
+                return literal
+        raise AttributeError(f"{name} is not a valid literal of {self.name}")
+
+    def __repr__(self):
+        return f"Enumeration({self.name}, {self.literals}, {self.timestamp}, {self.metadata})"
+
+class TypedElement(NamedElement):
+    """TypedElement is a subclass of NamedElement and is used to represent elements
+    that have a specific type.
+
+    Args:
+        name (str): The name of the typed element.
+        type (Type, str): The data type of the typed element.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the typed element (None as default).
+        visibility (str): Determines the kind of visibility of the typed element (public as default).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the typed element.
+        type (Type): The data type of the typed element.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the typed element (None as default).
+        visibility (str): Inherited from NamedElement, represents the visibility of the typed element (public as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    type_mapping = {
+        "str": StringType,
+        "string": StringType,
+        "int": IntegerType,
+        "float": FloatType,
+        "bool": BooleanType,
+        "time": TimeType,
+        "date": DateType,
+        "datetime": DateTimeType,
+        "timedelta": TimeDeltaType
+    }
+
+    def __init__(self, name: str, type: Union[Type, str], timestamp: datetime = None, metadata: Metadata = None,
+                 visibility: str="public", is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, visibility, is_derived, uncertainty)
+        self.type = self.type_mapping.get(type, type)
+
+    @property
+    def type(self) -> Type:
+        """Type: Get the type of the typed element."""
+        return self.__type
+
+    @type.setter
+    def type(self, type: Type):
+        """Type: Set the type of the typed element."""
+        self.__type = type
+
+class Multiplicity(Element):
+    """Represents the multiplicity of a Property.
+
+    It consists of a minimum and maximum value, indicating the allowed range.
+
+    Args:
+        min_multiplicity (int): The minimum multiplicity.
+        max_multiplicity (int): The maximum multiplicity. Use "*" for unlimited.
+        is_derived (bool): Indicates whether the element is derived (False as default).
+
+    Attributes:
+        min (int): The minimum multiplicity.
+        max (int): The maximum multiplicity. Use "*" for unlimited.
+        is_derived (bool): Indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, min_multiplicity: int, max_multiplicity: int, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(is_derived=is_derived, uncertainty=uncertainty)
+        self.min: int = min_multiplicity
+        self.max: int = max_multiplicity
+
+    @property
+    def min(self) -> int:
+        """int: Get the minimum multiplicity."""
+        return self.__min
+
+    @min.setter
+    def min(self, min_multiplicity: int):
+        """
+        int: Set the minimum multiplicity
+
+        Raises:
+            ValueError: (Invalid min multiplicity) if the minimum multiplicity is less than 0.
+        """
+        if min_multiplicity < 0:
+            raise ValueError("Invalid min multiplicity")
+        self.__min = min_multiplicity
+
+    @property
+    def max(self) -> int:
+        """int: Get the maximum multiplicity."""
+        return self.__max
+
+    @max.setter
+    def max(self, max_multiplicity: int):
+        """
+        int: Set the maximum multiplicity.
+
+        Raises:
+            ValueError: (Invalid max multiplicity) if the maximum multiplicity is less than 0 or
+            less than minimum multiplicity.
+        """
+        if max_multiplicity == "*":
+            max_multiplicity = UNLIMITED_MAX_MULTIPLICITY
+        if max_multiplicity <= 0:
+            raise ValueError("Invalid max multiplicity")
+        if max_multiplicity < self.min:
+            raise ValueError("Invalid max multiplicity")
+        self.__max = max_multiplicity
+
+    def __repr__(self):
+        return f'Multiplicity({self.min}, {self.max}, is_derived={self.is_derived})'
+
+
+# Properties are owned by a class or an association and point to a type with a multiplicity
+class Property(TypedElement):
+    """A property can represents an attribute of a class or an end of an association.
+
+    Properties are owned by a class or an association.
+
+    Args:
+        name (str): The name of the property.
+        type (Type): The type of the property.
+        owner (Type): The type that owns the property (None as default).
+        multiplicity (Multiplicity): The multiplicity of the property (1..1 as default).
+        visibility (str): The visibility of the property (public as default).
+        is_composite (bool): Indicates whether the property is a composite (False as default).
+        is_navigable (bool): Indicates whether the property is navigable in a relationship (True as default).
+        is_id (bool): Indicates whether the property is an id (False as default).
+        is_read_only (bool): Indicates whether the property is read only (False as default).
+        is_optional (bool): Indicates whether the property is optional/nullable (False as default).
+        default_value (Any): The default value of the property (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the property (None as default).
+         is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from TypedElement, represents the name of the property.
+        type (Type): Inherited from TypedElement, represents the type of the property.
+        owner (Type): The type that owns the property (public as default).
+        multiplicity (Multiplicity): The multiplicity of the property (1..1 as default).
+        visibility (str): Inherited from TypedElement, represents the visibility of the property (public as default).
+        is_composite (bool): Indicates whether the property is a composite (False as default).
+        is_navigable (bool): Indicates whether the property is navigable in a relationship (True as default).
+        is_id (bool): Indicates whether the property is an id (False as default).
+        is_read_only (bool): Indicates whether the property is read only (False as default).
+        is_optional (bool): Indicates whether the property is optional/nullable (False as default).
+        default_value (Any): The default value of the property (None as default).
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the property (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, type: Type, owner: Type = None, multiplicity: Multiplicity = Multiplicity(1, 1),
+                 visibility: str = 'public', is_composite: bool = False, is_navigable: bool = True,
+                 is_id: bool = False, is_read_only: bool = False, is_optional: bool = False,
+                 is_external_id: bool = False,
+                 default_value: Any = None,
+                 timestamp: datetime = None, metadata: Metadata = None, is_derived: bool = False,
+                 uncertainty: float = 0.0):
+
+        super().__init__(name, type, timestamp, metadata, visibility, is_derived, uncertainty)
+        self.owner: Type = owner
+        self.multiplicity: Multiplicity = multiplicity
+        self.is_composite: bool = is_composite
+        self.is_navigable: bool = is_navigable
+
+        self.__is_id = False
+        self.__is_optional = False
+        self.__is_external_id = False
+
+        self.is_id: bool = is_id
+        self.is_read_only: bool = is_read_only
+        self.is_optional: bool = is_optional
+        self.is_external_id: bool = is_external_id
+        self.default_value: Any = default_value
+
+    @property
+    def owner(self) -> Type:
+        """Type: Get the owner type of the property."""
+        return self.__owner
+
+    @owner.setter
+    def owner(self, owner: Type):
+        """
+        Type: Set the owner type of the property.
+
+        Raises:
+            ValueError: (Invalid owner) if the owner is instance of DataType.
+        """
+        if isinstance(owner, DataType):
+            raise ValueError("Invalid owner")
+        self.__owner = owner
+
+    @property
+    def multiplicity(self) -> Multiplicity:
+        """Multiplicity: Get the multiplicity of the property."""
+        return self.__multiplicity
+
+    @multiplicity.setter
+    def multiplicity(self, multiplicity: Multiplicity):
+        """Multiplicity: Set the multiplicity of the property."""
+        self.__multiplicity = multiplicity
+
+    @property
+    def is_composite(self) -> bool:
+        """bool: Get whether the property is composite."""
+        return self.__is_composite
+
+    @is_composite.setter
+    def is_composite(self, is_composite: bool):
+        """bool: Set whether the property is composite."""
+        self.__is_composite = is_composite
+
+    @property
+    def is_navigable(self) -> bool:
+        """bool: Get whether the property is navigable."""
+        return self.__is_navigable
+
+    @is_navigable.setter
+    def is_navigable(self, is_navigable: bool):
+        """bool: Set whether the property is navigable."""
+        self.__is_navigable = is_navigable
+
+    @property
+    def is_id(self) -> bool:
+        """bool: Get whether the property is an id."""
+        return self.__is_id
+
+    @is_id.setter
+    def is_id(self, is_id: bool):
+        """bool: Set whether the property is an id."""
+        if is_id is True and self.__is_optional is True:
+            raise ValueError("A property cannot be both an identifier and optional.")
+        self.__is_id = is_id
+
+    @property
+    def is_read_only(self) -> bool:
+        """bool: Get whether the property is read only."""
+        return self.__is_read_only
+
+    @is_read_only.setter
+    def is_read_only(self, is_read_only: bool):
+        """bool: Set whether the property is read only."""
+        self.__is_read_only = is_read_only
+
+    @property
+    def is_optional(self) -> bool:
+        """bool: Get whether the property is optional."""
+        return self.__is_optional
+
+    @is_optional.setter
+    def is_optional(self, is_optional: bool):
+        """bool: Set whether the property is optional."""
+        if is_optional is True and self.__is_id is True:
+            raise ValueError("A property cannot be both an identifier and optional.")
+        if is_optional is True and self.__is_external_id is True:
+            raise ValueError("A property cannot be both an external identifier and optional.")
+        self.__is_optional = is_optional
+
+    @property
+    def is_external_id(self) -> bool:
+        """bool: Get whether the property is an external identifier.
+
+        External identifiers are user-facing keys (e.g. ``name``, ``email``,
+        ``sku``) that people outside the system use to locate an object,
+        distinct from the internal/surrogate primary key (``is_id``). A class
+        may have multiple external-id properties forming a composite key, and a
+        property can be both ``is_id`` and ``is_external_id`` when a natural
+        key also serves as the PK.
+        """
+        return self.__is_external_id
+
+    @is_external_id.setter
+    def is_external_id(self, is_external_id: bool):
+        """bool: Set whether the property is an external identifier."""
+        if is_external_id is True and self.__is_optional is True:
+            raise ValueError("A property cannot be both an external identifier and optional.")
+        self.__is_external_id = is_external_id
+
+    @property
+    def default_value(self) -> Any:
+        """Any: Get the default value of the property."""
+        return self.__default_value
+
+    @default_value.setter
+    def default_value(self, default_value: Any):
+        """Any: Set the default value of the property."""
+        self.__default_value = default_value
+
+    def opposite_end(self) -> "Property":
+        """Property: Get the opposite end of the property if it is an association end."""
+        # Delayed import to avoid circular dependency
+        from besser.BUML.metamodel.structural import BinaryAssociation
+        if self.owner and isinstance(self.owner, BinaryAssociation):
+            for end in self.owner.ends:
+                if end != self:
+                    return end
+        return None
+
+    def __repr__(self):
+        return (
+            f'Property({self.name}, {self.visibility}, {self.type}, {self.multiplicity}, '
+            f'is_composite={self.is_composite}, is_id={self.is_id}, '
+            f'is_read_only={self.is_read_only}, is_optional={self.is_optional}, '
+            f'is_external_id={self.is_external_id}, '
+            f'default_value={self.default_value}, '
+            f'{self.timestamp}, {self.metadata}, '
+            f'is_derived={self.is_derived})'
+        )
+
+class Parameter(TypedElement):
+    """
+    Parameter is used to represent a parameter of a method with a specific type.
+
+    Args:
+        name (str): The name of the parameter.
+        type (Type): The data type of the parameter.
+        default_value (Any): The default value of the parameter (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the parameter (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the parameter.
+        type (Type): Inherited from TypedElement, represents the type of the parameter.
+        default_value (Any): The default value of the parameter (None as default).
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the parameter (None as default).
+    """
+
+    def __init__(self, name: str, type: Type, default_value: Any = None, timestamp: datetime = None,
+                 metadata: Metadata = None, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, type, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.default_value: Any = default_value
+
+    @property
+    def default_value(self) -> Any:
+        """Type: Get the default value of the parameter."""
+        return self.__default_value
+
+    @default_value.setter
+    def default_value(self, default_value: Any):
+        """Type: Set the default value of the parameter."""
+        self.__default_value = default_value
+
+    def __repr__(self):
+        return (
+            f'Parameter({self.name}, {self.type}, {self.default_value}, {self.timestamp}, '
+            f'{self.metadata}, is_derived={self.is_derived})'
+        )
+class Method(TypedElement):
+    """
+    Method is used to represent a method of a class.
+
+    A method can have different types of implementations:
+    - NONE: Abstract method or signature only (UML description)
+    - CODE: Python code implementation
+    - BAL: BESSER Action Language implementation
+    - STATE_MACHINE: Behavior defined by a state machine
+    - QUANTUM_CIRCUIT: Behavior defined by a quantum circuit
+
+    Args:
+        name (str): The name of the method.
+        visibility (str): Determines the kind of visibility of the method (public as default).
+        is_abstract (bool): Indicates if the method is abstract (False as default).
+        parameters (list[Parameter]): The list of parameters for the method (list() as default).
+        type (Type): The type of the method (None as default).
+        owner (Type): The type that owns the method (None as default).
+        code (str): code of the method ("" as default).
+        implementation_type (MethodImplementationType): The type of implementation (auto-detected as default).
+        state_machine (StateMachine): Reference to a state machine that defines the method behavior (None as default).
+        quantum_circuit (QuantumCircuit): Reference to a quantum circuit that defines the method behavior (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the method (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from TypedElement, represents the name of the method.
+        visibility (str): Inherited from TypedElement, represents the visibility of the method (public as default).
+        is_abstract (bool): Indicates if the method is abstract. (False as default)
+        parameters (list[Parameter]): The set of parameters for the method (set() as default).
+        type (Type): Inherited from TypedElement, represents the type of the method (None as default).
+        owner (Type): The type that owns the property (None as default).
+        code (str): code of the method ("" as default).
+        implementation_type (MethodImplementationType): The type of implementation.
+        state_machine (StateMachine): Reference to a state machine that defines the method behavior (None as default).
+        quantum_circuit (QuantumCircuit): Reference to a quantum circuit that defines the method behavior (None as default).
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the method (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, visibility: str = "public", is_abstract: bool = False,
+                 parameters: list[Parameter] = None, type: Type = None, owner: Type = None,
+                 code: str = "", implementation_type: MethodImplementationType = None,
+                 state_machine: "StateMachine" = None, quantum_circuit: "QuantumCircuit" = None,
+                 timestamp: datetime = None, metadata: Metadata = None, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, type, timestamp, metadata, visibility, is_derived, uncertainty)
+        self.is_abstract: bool = is_abstract
+        self.parameters: list[Parameter] = parameters if parameters is not None else list()
+        self.owner: Type = owner
+        self.code: str = code
+        self.state_machine: "StateMachine" = state_machine
+        self.quantum_circuit: "QuantumCircuit" = quantum_circuit
+        # Auto-detect implementation type if not provided
+        if implementation_type is not None:
+            self.implementation_type: MethodImplementationType = implementation_type
+        elif state_machine is not None:
+            self.implementation_type = MethodImplementationType.STATE_MACHINE
+        elif quantum_circuit is not None:
+            self.implementation_type = MethodImplementationType.QUANTUM_CIRCUIT
+        elif code:
+            self.implementation_type = MethodImplementationType.CODE
+        else:
+            self.implementation_type = MethodImplementationType.NONE
+
+    @property
+    def is_abstract(self) -> bool:
+        """bool: Get whether the method is abstract."""
+        return self.__is_abstract
+
+    @is_abstract.setter
+    def is_abstract(self, is_abstract: bool):
+        """bool: Set whether the method is abstract."""
+        self.__is_abstract = is_abstract
+
+    @property
+    def parameters(self) -> list[Parameter]:
+        """list[Parameter]: Get the set of parameters of the method."""
+        return self.__parameters
+
+    @parameters.setter
+    def parameters(self, parameters: list[Parameter]):
+        """
+        list[Parameter]: Set the parameters of the method.
+
+        Raises:
+            ValueError: if two parameters have the same name.
+        """
+        if parameters is not None:
+            names_seen = set()
+            duplicates = set()
+
+            for parameter in parameters:
+                if parameter.name in names_seen:
+                    duplicates.add(parameter.name)
+                names_seen.add(parameter.name)
+                parameter.owner = self
+
+            if duplicates:
+                raise ValueError(f"A method cannot have parameters with duplicate names: {', '.join(duplicates)}")
+
+            self.__parameters = parameters
+        else:
+            self.__parameters = list()
+
+    def add_parameter(self, parameter: Parameter):
+        """
+        Parameter: Add a parameter to the set of class parameters.
+
+        Raises:
+            ValueError: if the parameter name already exist.
+        """
+        if self.parameters is not None:
+            if parameter.name in [parameter.name for parameter in self.parameters]:
+                raise ValueError(f"A method cannot have two parameters with the same name: '{parameter.name}'")
+        self.parameters.append(parameter)
+
+    @property
+    def owner(self) -> Type:
+        """Type: Get the owner type of the method."""
+        return self.__owner
+
+    @owner.setter
+    def owner(self, owner: Type):
+        """
+        Type: Set the owner type of the method.
+
+        Raises:
+            ValueError: (Invalid owner) if the owner is instance of DataType.
+        """
+        if isinstance(owner, DataType):
+            raise ValueError("Invalid owner")
+        self.__owner = owner
+
+    @property
+    def code(self) -> str:
+        """str: Get the code of the method."""
+        return self.__code
+
+    @code.setter
+    def code(self, code: str):
+        """str: Set the code of the method."""
+        self.__code = code
+
+    @property
+    def implementation_type(self) -> MethodImplementationType:
+        """MethodImplementationType: Get the implementation type of the method."""
+        return self.__implementation_type
+
+    @implementation_type.setter
+    def implementation_type(self, implementation_type: MethodImplementationType):
+        """MethodImplementationType: Set the implementation type of the method."""
+        self.__implementation_type = implementation_type
+
+    @property
+    def state_machine(self) -> "StateMachine":
+        """StateMachine: Get the state machine that defines the method behavior."""
+        return self.__state_machine
+
+    @state_machine.setter
+    def state_machine(self, state_machine: "StateMachine"):
+        """StateMachine: Set the state machine that defines the method behavior."""
+        self.__state_machine = state_machine
+
+    @property
+    def quantum_circuit(self) -> "QuantumCircuit":
+        """QuantumCircuit: Get the quantum circuit that defines the method behavior."""
+        return self.__quantum_circuit
+
+    @quantum_circuit.setter
+    def quantum_circuit(self, quantum_circuit: "QuantumCircuit"):
+        """QuantumCircuit: Set the quantum circuit that defines the method behavior."""
+        self.__quantum_circuit = quantum_circuit
+
+    def __repr__(self):
+        return (
+            f'Method({self.name}, {self.visibility}, is_abstract={self.is_abstract}, {self.parameters}, '
+            f'{self.type}, {self.owner}, implementation_type={self.implementation_type}, {self.timestamp}, {self.metadata}, '
+            f'is_derived={self.is_derived})'
+        )
+
+
+class BehaviorImplementation(NamedElement):
+    """A behaviorImplementation represents the body of a behavior associated with a class.
+
+    Args:
+        name (str): The name of the behavior implementation.
+
+    Attributes:
+        name (str): The name of the behavior implementation.
+    """
+
+    def __init__(self, name: str, uncertainty: float = 0.0):
+        super().__init__(name, uncertainty=uncertainty)
+
+
+    def __repr__(self):
+        return f'BehaviorImplementation({self.name})'
+
+
+class BehaviorDeclaration(NamedElement):
+    """A BehaviorDeclaration represents the signature of a behavior associated with a class.
+
+    Args:
+        name (str): The name of the behavior.
+        implementations (set[BehaviorImplementation]): The implementations associated with the behavior.
+
+    Attributes:
+        name (str): The name of the behavior.
+        implementations (set[BehaviorImplementation]): The implementations associated with the behavior.
+    """
+
+    def __init__(self, name: str, implementations: set[BehaviorImplementation], uncertainty: float = 0.0):
+        super().__init__(name, uncertainty=uncertainty)
+        self.implementations: set[BehaviorImplementation] = implementations
+
+
+    @property
+    def implementations(self) -> set[BehaviorImplementation]:
+        """set[BehaviorImplementation]: Get the implementations of the behavior."""
+        return self.__implementations
+
+
+    @implementations.setter
+    def implementations(self, implementations: set[BehaviorImplementation]):
+        """
+        set[BehaviorImplementation]: Set the implementations of the behavior.
+
+        Raises:
+            ValueError: if two implementations have the same name.
+        """
+        if implementations is not None:
+            names = [implementation.name for implementation in implementations]
+            if len(names) != len(set(names)):
+                raise ValueError("A behavior cannot have two implementations with the same name")
+            self.__implementations = implementations
+        else:
+            self.__implementations = set()
+
+    def __repr__(self):
+        return f'BehaviorDeclaration({self.name}, {self.implementations})'
+
+
+class Class(Type):
+    """Represents a class in a modeling context.
+
+    A Class is a type that defines a blueprint for objects. It can have attributes, associations,
+    and generalizations with other classes.
+
+    Args:
+        name (str): The name of the class.
+        attributes (set[Property]): The set of attributes associated with the class (None as default).
+        methods (set[Method]): The set of methods of the class (None as default).
+        is_abstract (bool): Indicates whether the class is abstract (False as default).
+        is_read_only (bool): Indicates whether the class is read only (False as default).
+        behaviors (set[BehaviorDeclaration]): The set of behaviors associated with the class (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the class (None as default).
+        is_derived (bool): Indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from Type, represents the name of the class.
+        attributes (set[Property]): The set of attributes associated with the class (set() as default).
+        methods (set[Method]): The set of methods of the class (set() as default).
+        is_abstract (bool): Indicates whether the class is abstract (False as default).
+        is_read_only (bool): Indicates whether the class is read only (False as default).
+        behaviors (set[BehaviorDeclaration]): The set of behaviors associated with the class (None as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the class (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    """
+
+    def __init__(self, name: str, attributes: set[Property] = None, methods: set[Method] = None,
+                 is_abstract: bool= False, is_read_only: bool= False, behaviors: set[BehaviorDeclaration] = None,
+                 timestamp: datetime = None, metadata: Metadata = None, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.is_abstract: bool = is_abstract
+        self.is_read_only: bool = is_read_only
+        self.behaviors: set[BehaviorDeclaration] = behaviors if behaviors is not None else set()
+        self.attributes: set[Property] = attributes if attributes is not None else set()
+        self.methods: set[Method] = methods if methods is not None else set()
+        self.__associations: set[Association] = set()
+        self.__generalizations: set[Generalization] = set()
+
+    @property
+    def attributes(self) -> set[Property]:
+        """set[Property]: Get the attributes of the class."""
+        return self.__attributes
+
+    @attributes.setter
+    def attributes(self, attributes: set[Property]):
+        """
+        set[Property]: Set the attributes of the class.
+
+        Raises:
+            ValueError: if two attributes have the same name.
+            ValueError: if two attributes are id.
+        """
+        if attributes is not None:
+            names_seen = set()
+            duplicates = set()
+            id_counter = 0
+
+            for attribute in attributes:
+                if attribute.name in names_seen:
+                    duplicates.add(attribute.name)
+                names_seen.add(attribute.name)
+
+                if attribute.is_id:
+                    id_counter += 1
+
+            if duplicates:
+                raise ValueError(f"A class cannot have attributes with duplicate names: {', '.join(duplicates)}")
+
+            if id_counter > 1:
+                raise ValueError("A class cannot have more than one attribute marked as 'id'")
+
+            for attribute in attributes:
+                if attribute.owner and attribute.owner != self:
+                    attribute.owner.attributes.discard(attribute)
+                attribute.owner = self
+            self.__attributes = attributes
+        else:
+            self.__attributes = set()
+
+    @property
+    def methods(self) -> set[Method]:
+        """set[Method]: Get the methods of the class."""
+        return self.__methods
+
+    @methods.setter
+    def methods(self, methods: set[Method]):
+        """
+        set[Method]: Set the methods of the class.
+
+        Raises:
+            ValueError: if two methods have the same name.
+        """
+        if methods is not None:
+            names_seen = set()
+            duplicates = set()
+
+            for method in methods:
+                if method.name in names_seen:
+                    duplicates.add(method.name)
+                names_seen.add(method.name)
+
+            if duplicates:
+                raise ValueError(f"A class cannot have methods with duplicate names: {', '.join(duplicates)}")
+
+            for method in methods:
+                method.owner = self
+            self.__methods = methods
+        else:
+            self.__methods = set()
+
+    def add_method(self, method: Method):
+        """
+        Method: Add a method to the set of class methods.
+
+        Raises:
+            ValueError: if the method name already exist.
+        """
+        if self.methods is not None:
+            if method.name in [method.name for method in self.methods]:
+                raise ValueError(f"A class cannot have two methods with the same name: '{method.name}'")
+        method.owner = self
+        self.methods.add(method)
+
+    def all_attributes(self) -> set[Property]:
+        """set[Property]: Get all attributes, including inherited ones."""
+        inherited_attributes: set[Property] = self.inherited_attributes()
+        return self.__attributes | inherited_attributes
+
+    def add_attribute(self, attribute: Property):
+        """
+        Property: Add an attribute to the set of class attributes.
+
+        Raises:
+            ValueError: if the attribute name already exist.
+        """
+        if self.attributes is not None:
+            if attribute.name in [attribute.name for attribute in self.attributes]:
+                raise ValueError(f"A class cannot have two attributes with the same name: '{attribute.name}'")
+        if attribute.owner and attribute.owner != self:
+            attribute.owner.attributes.discard(attribute)
+        attribute.owner = self
+        self.attributes.add(attribute)
+
+    @property
+    def behaviors(self) -> set[BehaviorDeclaration]:
+        """set[BehaviorDeclaration]: Get the behaviors associated with the class."""
+        return self.__behaviors
+
+    @behaviors.setter
+    def behaviors(self, behaviors: set[BehaviorDeclaration]):
+        """
+        set[BehaviorDeclaration]: Set the behaviors associated with the class.
+
+        Raises:
+            ValueError: if two behaviors have the same name.
+        """
+        if behaviors is not None:
+            names = [behavior.name for behavior in behaviors]
+            if len(names) != len(set(names)):
+                raise ValueError("A class cannot have two behaviors with the same name")
+            self.__behaviors = behaviors
+        else:
+            self.__behaviors = set()
+
+    @property
+    def is_abstract(self) -> bool:
+        """bool: Get whether the class is abstract."""
+        return self.__is_abstract
+
+    @is_abstract.setter
+    def is_abstract(self, is_abstract: bool):
+        """bool: Set whether the class is abstract."""
+        self.__is_abstract = is_abstract
+
+    @property
+    def is_read_only(self) -> bool:
+        """bool: Get whether the class is read only."""
+        return self.__is_read_only
+
+    @is_read_only.setter
+    def is_read_only(self, is_read_only: bool):
+        """bool: Set whether the class is read only."""
+        self.__is_read_only = is_read_only
+
+    @property
+    def associations(self) -> set:
+        """set[Association]: Get the set of associations involving the class."""
+        return self.__associations
+
+    def _add_association(self, association):
+        """Association: Add an association to the set of class associations."""
+        self.__associations.add(association)
+
+    def _validate_unique_end_names(self, ends):
+        """Ensure that no association end has a duplicate name in this class or its specializations."""
+        # Check for duplicate end names within the provided ends
+        new_names = [e.name for e in ends]
+        if len(new_names) != len(set(new_names)):
+            raise ValueError(
+                f"The association introduces duplicate end names: {', '.join(n for n in new_names if new_names.count(n) > 1)}"
+            )
+
+        # Check against current class's ends
+        existing_end_names = {e.name for e in self.all_association_ends()}
+        for end in ends:
+            if end.name in existing_end_names:
+                raise ValueError(
+                    f"The class '{self.name}' cannot have two association ends with the same name: '{end.name}'"
+                )
+
+        # Check against children/specialized classes' ends
+        for child in self.all_specializations():
+            child_end_names = {e.name for e in child.association_ends()}
+            for end in ends:
+                if end.name in child_end_names:
+                    raise ValueError(
+                        f"The class '{child.name}' cannot have two association ends with the same name: '{end.name}'"
+                    )
+
+    def _delete_association(self, association):
+        """Association: Remove an association to the set of class associations."""
+        self.__associations.discard(association)
+
+    @property
+    def generalizations(self) -> set:
+        """set[Generalization]: Get the set of generalizations involving the class."""
+        return self.__generalizations
+
+    def _add_generalization(self, generalization):
+        """Generalization: Add a generalization to the set of class generalizations."""
+        self.__generalizations.add(generalization)
+
+    def _delete_generalization(self, generalization):
+        """Generalization: Remove a generalization to the set of class generalizations."""
+        self.__generalizations.discard(generalization)
+
+    def inherited_attributes(self) -> set[Property]:
+        """set[Property]: Get the set of inherited attributes."""
+        inherited_attributes = set()
+        for parent in self.all_parents():
+            inherited_attributes.update(parent.attributes)
+        return inherited_attributes
+
+    def association_ends(self) -> set:
+        """set[Property]: Get the set of association ends of the class."""
+        ends = set()
+        for association in self.__associations:
+            aends = association.ends
+            ends.update(aends)
+            l_aends = list(aends)
+            if not(len(l_aends) == 2 and l_aends[0].type == l_aends[1].type):
+                for end in aends:
+                    if end.type == self:
+                        ends.discard(end)
+        return ends
+
+    def all_association_ends(self) -> set[Property]:
+        """set[Property]: Get the set of direct and indirect association ends of the class."""
+        all_ends = self.association_ends()
+        for parent in self.all_parents():
+            ends = parent.association_ends()
+            all_ends.update(ends)
+        return all_ends
+
+    def parents(self) -> set:
+        """set[Class]: Get the set of direct parents of the class."""
+        parents = set()
+        for generalization in self.__generalizations:
+            if generalization.general != self:
+                parents.add(generalization.general)
+        return parents
+
+    def all_parents(self) -> set:
+        """set[Class]: Get the set of direct and indirect parents of the class."""
+        all_parents = set()
+        all_parents.update(self.parents())
+        for parent in self.parents():
+            all_parents.update(parent.all_parents())
+        return all_parents
+
+    def specializations(self) -> set:
+        """set[Class]: Get the set of direct specializations (children) of the class."""
+        specializations = set()
+        for generalization in self.__generalizations:
+            if generalization.specific != self:
+                specializations.add(generalization.specific)
+        return specializations
+
+    def all_specializations(self) -> set:
+        """set[Class]: Get the set of direct and indirect specializations (children) of the class."""
+        all_spec = set()
+        all_spec.update(self.specializations())
+        for specialization in self.specializations():
+            all_spec.update(specialization.all_specializations())
+        return all_spec
+
+    def id_attribute(self) -> Property:
+        """Property: Get the id attribute of the class."""
+        for attribute in self.attributes:
+            if attribute.is_id:
+                return attribute
+        return None
+
+    def __call__(self, instance_name: str):
+        from besser.BUML.metamodel.object.builder import ObjectBuilder
+        return ObjectBuilder(self).name(instance_name)
+
+    def __repr__(self):
+        return (
+            f'Class({self.name}, {self.attributes}, {self.methods}, {self.timestamp}, {self.metadata}, '
+            f'is_abstract={self.is_abstract}, is_derived={self.is_derived})'
+        )
+
+
+class Association(NamedElement):
+    """Represents an association between classes.
+
+    An Association defines a relationship between classes and is composed of two or more ends,
+    each associated with a class. An association must have more than one end.
+
+    Args:
+        name (str): The name of the association.
+        ends (set[Property]): The set of ends related to the association.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the association (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the association.
+        ends (set[Property]): The set of ends related to the association.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the association (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, ends: set[Property], timestamp: datetime = None, metadata: Metadata = None,
+                is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.__ends: set[Property] = set()
+        self.ends: set[Property] = ends
+
+    @property
+    def ends(self) -> set[Property]:
+        """set[Property]: Get the ends of the association."""
+        return self.__ends
+
+    @ends.setter
+    def ends(self, ends: set[Property]):
+        """
+        set[Property]: Set the ends of the association. Two or more ends are required.
+
+        Raises:
+            ValueError: if an association has less than two ends.
+            TypeError: if any element in ends is not a Property instance.
+        """
+        # Type checking: ensure all elements are Property instances
+        for end in ends:
+            if not isinstance(end, Property):
+                raise TypeError(f"Expected Property instance, but got {type(end).__name__} instance: {end}")
+
+        if len(ends) <= 1:
+             raise ValueError("An association must have more than one end")
+        names = [e.name for e in ends]
+        if len(names) != len(set(names)):
+            raise ValueError("Association ends must have unique names")
+        if hasattr(self, "ends"):
+            for end in self.ends:
+                end.type._delete_association(association=self)
+        for end in ends:
+            end.type._validate_unique_end_names(ends={e for e in ends if e != end})
+            end.owner = self
+            end.type._add_association(association=self)
+        self.__ends = ends
+
+    def __repr__(self):
+        return f'Association({self.name}, {self.ends}, {self.timestamp}, {self.metadata}, is_derived={self.is_derived})'
+
+class BinaryAssociation(Association):
+    """Represents a binary association between two classes.
+
+    A BinaryAssociation is a specialized form of Association that specifically involves
+    two ends, each associated with a class. It enforces constraints on the association,
+    such as having exactly two ends. Exactly two ends are required
+
+    Args:
+        name (str): The name of the binary association.
+        ends (set[Property]): The set of ends related to the binary association.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the binary association (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from Association, represents the name of the binary association.
+        ends (set[Property]): Inherited from NamedElement, represents the set of ends related to the binary association.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the binary association (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    @Association.ends.setter
+    def ends(self, ends: set[Property]):
+        """set[Property]: Set the ends of the association.
+
+        Raises:
+            ValueError: if the association ends are not exactly two, or if both ends are tagged as aggregation, or
+            if both ends are tagged as composition.
+            TypeError: if any element in ends is not a Property instance.
+        """
+        # Type checking: ensure all elements are Property instances (before any attribute access)
+        for end in ends:
+            if not isinstance(end, Property):
+                raise TypeError(f"Expected Property instance, but got {type(end).__name__} instance: {end}")
+
+        if len(ends) != 2:
+            raise ValueError("A binary association must have exactly two ends")
+        if list(ends)[0].is_composite is True and list(ends)[1].is_composite is True:
+            raise ValueError("The composition attribute cannot be tagged at both ends")
+        super(BinaryAssociation, BinaryAssociation).ends.fset(self, ends)
+
+    def __repr__(self):
+        return f'BinaryAssociation({self.name}, {self.ends}, {self.timestamp}, {self.metadata}, is_derived={self.is_derived})'
+
+class AssociationClass(Class):
+    # Class that has an association nature
+    """An AssociationClass is a class that that has an association nature.
+    It inherits from Class and is associated with an underlying Association.
+
+    Args:
+        name (str): The name of the association class.
+        attributes (set[Property]): The set of attributes associated with the association class.
+        association (Association): The underlying association linked to the association class.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the association class (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from Class, represents the name of the association class.
+        attributes (set[Property]): Inherited from Class, represents the set of attributes associated with the association class.
+        association (Association): The underlying association linked to the association class.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the association class (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, attributes: set[Property], association: Association, timestamp: datetime = None,
+                 metadata: Metadata = None, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, attributes, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.association: Association = association
+
+    @property
+    def association(self) -> Association:
+        """Association: Get the underlying association of the association class."""
+        return self.__association
+
+    @association.setter
+    def association(self, association: Association):
+        """Association: Set the underlying association of the association class."""
+        self.__association = association
+
+    def __repr__(self):
+        return f'AssociationClass({self.name}, {self.attributes}, {self.association}, {self.timestamp}, {self.metadata}, is_derived={self.is_derived})'
+
+class Generalization(Element):
+    """Represents a generalization relationship between two classes.
+
+    A Generalization is a relationship between two classes, where one class (specific)
+    inherits attributes and behaviors from another class (general).
+
+    Args:
+        general (Class): The general (parent) class in the generalization relationship.
+        specific (Class): The specific (child) class in the generalization relationship.
+        timestamp (datetime): Object creation datetime (default is current time).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        general (Class): The general (parent) class in the generalization relationship.
+        specific (Class): The specific (child) class in the generalization relationship.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, general: Class, specific: Class, timestamp: datetime = None, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(timestamp, is_derived, uncertainty)
+        self.general: Class = general
+        self.specific: Class = specific
+
+    @property
+    def general(self) -> Class:
+        """Class: Get the general (parent) class."""
+        return self.__general
+
+    @general.setter
+    def general(self, general: Class):
+        """Class: Set the general (parent) class."""
+        if hasattr(self, "general"):
+            self.general._delete_generalization(generalization=self)
+        # Check unique end names before adding the generalization
+        if hasattr(self, "specific"):
+            self.specific._validate_unique_end_names(ends=general.all_association_ends())
+        general._add_generalization(generalization=self)
+        self.__general = general
+
+    @property
+    def specific(self) -> Class:
+        """Class: Get the specific (child) class."""
+        return self.__specific
+
+    @specific.setter
+    def specific(self, specific: Class):
+        """
+        Class: Set the specific (child) class.
+
+        Raises:
+            ValueError: if the general class is equal to the specific class
+        """
+        if specific == self.general:
+            raise ValueError("A class cannot be a generalization of itself")
+        # Check unique end names before adding the generalization
+        specific._validate_unique_end_names(ends=self.general.all_association_ends())
+
+        if hasattr(self, "specific"):
+            self.specific._delete_generalization(generalization=self)
+        specific._add_generalization(generalization=self)
+        self.__specific = specific
+
+    def __repr__(self):
+        return f'Generalization({self.general}, {self.specific}, {self.timestamp}, is_derived={self.is_derived})'
+
+class GeneralizationSet(NamedElement):
+    """Represents a set of generalization relationships.
+
+    Args:
+        name (str): The name of the generalization set.
+        generalizations (set[Generalization]): The set of generalization relationships in the set.
+        is_disjoint (bool): Indicates whether the set is disjoint (instances cannot belong to more than one class
+            in the set).
+        is_complete (bool): Indicates whether the set is complete (every instance of the superclass must belong to
+            a subclass).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the generalization set (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the generalization set.
+        generalizations (set[Generalization]): The set of generalization relationships in the set.
+        is_disjoint (bool): Indicates whether the set is disjoint (instances cannot belong to more than one class
+            in the set).
+        is_complete (bool): Indicates whether the set is complete (every instance of the superclass must belong to
+            a subclass).
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the generalization set (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, generalizations: set[Generalization], is_disjoint: bool, is_complete: bool,
+                timestamp: datetime = None, metadata: Metadata = None, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.generalizations: set[Generalization] = generalizations
+        self.is_disjoint: bool = is_disjoint
+        self.is_complete: bool = is_complete
+
+    @property
+    def generalizations(self) -> set[Generalization]:
+        """set[Generalization]: Get the generalization relationships."""
+        return self.__generalizations
+
+    @generalizations.setter
+    def generalizations(self, generalizations: set[Generalization]):
+        """set[Generalization]: Set the generalization relationships."""
+        self.__generalizations = generalizations
+
+    @property
+    def is_disjoint(self) -> bool:
+        """bool: Get whether the set is disjoint."""
+        return self.__is_disjoint
+
+    @is_disjoint.setter
+    def is_disjoint(self, is_disjoint: bool):
+        """bool: Set whether the set is disjoint."""
+        self.__is_disjoint = is_disjoint
+
+    @property
+    def is_complete(self) -> bool:
+        """bool: Get whether the set is complete."""
+        return self.__is_complete
+
+    @is_complete.setter
+    def is_complete(self, is_complete: bool):
+        """bool: Set whether the set is complete."""
+        self.__is_complete = is_complete
+
+    def __repr__(self):
+        return (
+            f'GeneralizationSet({self.name}, {self.generalizations}, '
+            f'is_disjoint={self.is_disjoint}, is_complete={self.is_complete}, {self.timestamp}, {self.metadata},'
+            f'is_derived={self.is_derived})'
+        )
+
+class Package(NamedElement):
+    """A Package is a grouping mechanism that allows organizing and managing a set of NamedElements.
+
+    Args:
+        name (str): The name of the package.
+        elements (set[NamedElement]): The set of elements contained in the package.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the package (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the package.
+        elements (set[NamedElement]): The set of elements contained in the package.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the package (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, elements: set[NamedElement], timestamp: datetime = None, metadata: Metadata = None,
+                is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.elements: set[NamedElement] = elements
+
+    @property
+    def elements(self) -> set[NamedElement]:
+        """set[NamedElement]: Get the named elements contained in the package."""
+        return self.__elements
+
+    @elements.setter
+    def elements(self, elements: set[NamedElement]):
+        """set[NamedElement]: Set the named elements contained in the package."""
+        self.__elements = elements
+
+    def get_classes(self) -> set[Class]:
+        """set[Class]: Get all classes within the package."""
+        return {element for element in self.elements if isinstance(element, Class)}
+
+    def get_associations(self) -> set[Association]:
+        """set[Association]: Get all associations within the package."""
+        return {element for element in self.elements if isinstance(element, Association)}
+
+    def get_generalizations(self) -> set[Generalization]:
+        """set[Generalization]: Get all generalizations within the package."""
+        return {element for element in self.elements if isinstance(element, Generalization)}
+
+    def get_enumerations(self) -> set[Enumeration]:
+        """set[Enumeration]: Get all enumerations within the package."""
+        return {element for element in self.elements if isinstance(element, Enumeration)}
+
+    def __repr__(self):
+        return f'Package({self.name}, {self.elements}), {self.timestamp}, {self.metadata}, is_derived={self.is_derived}'
+
+class Constraint(NamedElement):
+    """A Constraint is a statement that restricts or defines conditions on the behavior,
+    structure, or other aspects of the modeled system.
+
+    Args:
+        name (str): The name of the constraint.
+        context (Class): The class to which the constraint is associated.
+        expression (str): The expression or condition defined by the constraint.
+        language (str): The language in which the constraint expression is written.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the constraint (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the constraint.
+        context (Class): The class to which the constraint is associated.
+        expression (str): The expression or condition defined by the constraint.
+        language (str): The language in which the constraint expression is written.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the constraint (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+    """
+
+    def __init__(self, name: str, context: Class, expression: Any, language: str, timestamp: datetime = None,
+                 metadata: Metadata = None, is_derived: bool = False, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.context: Class = context
+        self.expression: str = expression
+        self.language: str = language
+
+    @property
+    def context(self) -> Class:
+        """Class: Get the class to which the constraint is associated."""
+        return self.__context
+
+    @context.setter
+    def context(self, context: Class):
+        """Class: Set the class to which the constraint is associated."""
+        self.__context = context
+
+    @property
+    def expression(self) -> str:
+        """str: Get the expression or condition defined by the constraint."""
+        return self.__expression
+
+    @expression.setter
+    def expression(self, expression: Any):
+        """str: Set the expression or condition defined by the constraint."""
+        self.__expression = expression
+
+    @property
+    def language(self) -> str:
+        """str: Get the language in which the constraint expression is written."""
+        return self.__language
+
+    @language.setter
+    def language(self, language: str):
+        """str: Set the language in which the constraint expression is written."""
+        self.__language = language
+
+    def __repr__(self):
+        return (
+            f'Constraint({self.name}, {self.context.name}, {self.language}, {self.expression}, '
+            f'{self.timestamp}, {self.metadata}, is_derived={self.is_derived})'
+        )
+class Model(NamedElement):
+    """A model is the root element. There are different types of models
+    that inherit from this class. For example, DomainModel, ObjectModel, or GUIModel.
+
+    Args:
+        name (str): The name of the model.
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the model (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+        elements (set[Element]): Set of model Elements in the Model.
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the model.
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the model (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+        elements (set[Element]): Set of model Elements in the Model.
+    """
+    def __init__(self, name: str, timestamp: datetime = None, metadata: Metadata = None, is_derived: bool = False,
+                elements: set[Element] = None, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, uncertainty=uncertainty)
+        self.elements: set[Element] = elements if elements is not None else set()
+
+    @property
+    def elements(self) -> set[Element]:
+        """set[Element]: Get the set of model elements in the model."""
+        return self.__elements
+
+    @elements.setter
+    def elements(self, elements: set[Element]):
+        """set[Element]: Set the set of model elements in the model."""
+        if elements is not None:
+            self.__elements = elements
+        else:
+            self.__elements = set()
+
+class DomainModel(Model):
+    """A domain model comprises a number of types, associations,
+    generalizations, packages, constraints, and others.
+
+    Args:
+        name (str): The name of the domain model.
+        types (set[Type]): The set of types (classes and datatypes) in the domain model (set() as default).
+        associations (set[Association]): The set of associations in the domain model (set() as default).
+        generalizations (set[Generalization]): The set of generalizations in the domain model (set() as default).
+        packages (set[Package]): The set of packages in the domain model (set() as default).
+        constraints (set[Constraint]): The set of constraints in the domain model (set() as default).
+        timestamp (datetime): Object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the domain model (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+        elements (set[Element]): Set of model Elements in the Model. This property is derived (auto-calculated).
+
+    Attributes:
+        name (str): Inherited from NamedElement, represents the name of the domain model.
+        types (set[Type]): The set of types (classes and datatypes) in the domain model (set() as default).
+        associations (set[Association]): The set of associations in the domain model (set() as default).
+        generalizations (set[Generalization]): The set of generalizations in the domain model (set() as default).
+        packages (set[Package]): The set of packages in the domain model (set() as default).
+        constraints (set[Constraint]): The set of constraints in the domain model (set() as default).
+        timestamp (datetime): Inherited from NamedElement; object creation datetime (default is current time).
+        metadata (Metadata): Metadata information for the domain model (None as default).
+        is_derived (bool): Inherited from NamedElement, indicates whether the element is derived (False as default).
+        elements (set[Element]): Set of model Elements in the Model. This property is derived (auto-calculated).
+    """
+
+    def __init__(self, name: str, types: set[Type] = None, associations: set[Association] = None,
+                generalizations: set[Generalization] = None, packages: set[Package] = None,
+                constraints: set[Constraint] = None, timestamp: datetime = None, metadata: Metadata = None,
+                is_derived: bool = False, elements: set[Element] = None, uncertainty: float = 0.0):
+        super().__init__(name, timestamp, metadata, is_derived=is_derived, elements=elements, uncertainty=uncertainty)
+        # A flag to prevent premature `_update_elements` calls during initialization
+        self.__initializing = True
+        self.types: set[Type] = types if types is not None else set()
+        self.packages: set[Package] = packages if packages is not None else set()
+        self.constraints: set[Constraint] = constraints if constraints is not None else set()
+        self.associations: set[Association] = associations if associations is not None else set()
+        self.generalizations: set[Generalization] = generalizations if generalizations is not None else set()
+        # initialization is done, we update elements
+        self.__initializing = False
+        self._update_elements()
+
+    def _update_elements(self):
+        """Recalculates the elements property by combining all relevant sets."""
+        if not self.__initializing:
+            self.elements = set(self.types) | set(self.packages) | set(self.constraints) \
+                            | set(self.associations) | set(self.generalizations)
+
+    @property
+    def types(self) -> set[Type]:
+        """set[Type]: Get the set of types in the domain model."""
+        return self.__types
+
+    @types.setter
+    def types(self, types: set[Type]):
+        """
+        set[Type]: Set the set of types in the domain model, including primitive data types.
+
+        Raises:
+            ValueError: if there are two types with the same name.
+            TypeError: if any element in types is not a Type instance.
+        """
+        # Type checking: ensure all elements are Type instances
+        for type_ in types:
+            if not isinstance(type_, Type):
+                raise TypeError(f"Expected Type instance, but got {type(type_).__name__} instance: {type_}")
+
+        primitive_names = {'int', 'str', 'bool', 'float', 'datetime', 'date', 'time', 'timedelta', 'any'}
+        has_primitives = any(t.name in primitive_names for t in types)
+
+        if not has_primitives:
+            types = types | data_types
+
+        names_seen = set()
+        duplicates = set()
+
+        for type_ in types:
+            if type_.name in names_seen:
+                duplicates.add(type_.name)
+            names_seen.add(type_.name)
+
+        if duplicates:
+            raise ValueError(f"The model cannot have types with duplicate names: {', '.join(duplicates)}")
+        self.__types = types
+        self._update_elements()
+
+    def get_type_by_name(self, type_name: str) -> Type:
+        """Type: Gets an Type by name."""
+        return next(
+            (type_element for type_element in self.types if type_element.name == type_name), None
+            )
+
+    def add_type(self, type_: Type):
+        """Type: Add a type (Class or DataType) to the set of types of the model."""
+        self.types = self.types | {type_}
+
+    def remove_type(self, type_: Type):
+        """Remove a type from the model.
+
+        Args:
+            type_ (Type): The type to remove.
+
+        Raises:
+            ValueError: if the type is not in the model.
+        """
+        if type_ not in self.__types:
+            raise ValueError(f"Type '{type_.name}' is not in the model")
+        self.__types.discard(type_)
+        self._update_elements()
+
+    @property
+    def associations(self) -> set[Association]:
+        """set[Association]: Get the set of associations in the domain model."""
+        return self.__associations
+
+    @associations.setter
+    def associations(self, associations: set[Association]):
+        """
+        set[Association]: Set the set of associations in the domain model.
+
+        Raises:
+            ValueError: if there are two associations with the same name.
+            TypeError: if any element in associations is not an Association instance.
+        """
+        if associations is not None:
+            # Type checking: ensure all elements are Association instances
+            for association in associations:
+                if not isinstance(association, Association):
+                    raise TypeError(f"Expected Association instance, but got {type(association).__name__} instance: {association}")
+
+            names_seen = set()
+            duplicates = set()
+
+            for association in associations:
+                if association.name in names_seen:
+                    duplicates.add(association.name)
+                names_seen.add(association.name)
+
+            if duplicates:
+                raise ValueError(f"The model cannot have associations with duplicate names: {', '.join(duplicates)}")
+
+            self.__associations = associations
+        else:
+            self.__associations = set()
+
+        self._update_elements()
+
+    def add_association(self, association: Association):
+        """Association: Add an association to the set of associations of the model."""
+        self.associations = self.associations | {association}
+
+    def remove_association(self, association: Association):
+        """Remove an association from the model and clean up references in involved classes.
+
+        Args:
+            association (Association): The association to remove.
+
+        Raises:
+            ValueError: if the association is not in the model.
+        """
+        if association not in self.__associations:
+            raise ValueError(f"Association '{association.name}' is not in the model")
+        for end in association.ends:
+            end.type._delete_association(association)
+        self.__associations.discard(association)
+        self._update_elements()
+
+    @property
+    def generalizations(self) -> set[Generalization]:
+        """set[Generalization]: Get the set of generalizations in the domain model."""
+        return self.__generalizations
+
+    @generalizations.setter
+    def generalizations(self, generalizations: set[Generalization]):
+        """
+        set[Generalization]: Set the set of generalizations in the domain model.
+
+        Raises:
+            TypeError: if any element in generalizations is not a Generalization instance.
+        """
+        if generalizations is not None:
+            # Type checking: ensure all elements are Generalization instances
+            for generalization in generalizations:
+                if not isinstance(generalization, Generalization):
+                    raise TypeError(f"Expected Generalization instance, but got {type(generalization).__name__} instance: {generalization}")
+
+            self.__generalizations = generalizations
+        else:
+            self.__generalizations = set()
+
+        self._update_elements()
+
+    def add_generalization(self, generalization: Generalization):
+        """Generalization: Add a generalization to the set of generalizations of the model."""
+        self.generalizations = self.generalizations | {generalization}
+
+    def remove_generalization(self, generalization: Generalization):
+        """Remove a generalization from the model and clean up references in involved classes.
+
+        Args:
+            generalization (Generalization): The generalization to remove.
+
+        Raises:
+            ValueError: if the generalization is not in the model.
+        """
+        if generalization not in self.__generalizations:
+            raise ValueError("Generalization is not in the model")
+        generalization.general._delete_generalization(generalization)
+        generalization.specific._delete_generalization(generalization)
+        self.__generalizations.discard(generalization)
+        self._update_elements()
+
+    def get_enumerations(self) -> set[Enumeration]:
+        """set[Enumeration]: Get the set of enumerations in the domain model."""
+        return {element for element in self.types if isinstance(element, Enumeration)}
+
+    @property
+    def packages(self) -> set[Package]:
+        """set[Package]: Get the set of packages in the domain model."""
+        return self.__packages
+
+    @packages.setter
+    def packages(self, packages: set[Package]):
+        """
+        set[Package]: Set the set of packages in the domain model.
+
+        Raises:
+            ValueError: if there are two packages with the same name.
+            TypeError: if any element in packages is not a Package instance.
+        """
+        if packages is not None:
+            # Type checking: ensure all elements are Package instances
+            for package in packages:
+                if not isinstance(package, Package):
+                    raise TypeError(f"Expected Package instance, but got {type(package).__name__} instance: {package}")
+
+            names_seen = set()
+            duplicates = set()
+
+            for package in packages:
+                if package.name in names_seen:
+                    duplicates.add(package.name)
+                names_seen.add(package.name)
+
+            if duplicates:
+                raise ValueError(f"The model cannot have packages with duplicate names: {', '.join(duplicates)}")
+
+            self.__packages = packages
+        else:
+            self.__packages = set()
+
+        self._update_elements()
+
+    @property
+    def constraints(self) -> set[Constraint]:
+        """set[Constraint]: Get the set of constraints in the domain model."""
+        return self.__constraints
+
+    @constraints.setter
+    def constraints(self, constraints: set[Constraint]):
+        """
+        set[Constraint]: Set the set of constraints in the domain model.
+
+        Raises:
+            ValueError: if there are two constraints with the same name.
+            TypeError: if any element in constraints is not a Constraint instance.
+        """
+        if constraints is not None:
+            # Type checking: ensure all elements are Constraint instances
+            for constraint in constraints:
+                if not isinstance(constraint, Constraint):
+                    raise TypeError(f"Expected Constraint instance, but got {type(constraint).__name__} instance: {constraint}")
+
+            names = [constraint.name for constraint in constraints]
+            if len(names) != len(set(names)):
+                raise ValueError("The model cannot have two constraints with the same name")
+            self.__constraints = constraints
+        else:
+            self.__constraints = set()
+
+        self._update_elements()
+
+    def add_constraint(self, constraint: Constraint):
+        """Constraint: Add a constraint to the set of constraints of the model."""
+        self.constraints = self.constraints | {constraint}
+
+    def remove_constraint(self, constraint: Constraint):
+        """Remove a constraint from the model.
+
+        Args:
+            constraint (Constraint): The constraint to remove.
+
+        Raises:
+            ValueError: if the constraint is not in the model.
+        """
+        if constraint not in self.__constraints:
+            raise ValueError(f"Constraint '{constraint.name}' is not in the model")
+        self.__constraints.discard(constraint)
+        self._update_elements()
+
+    def get_classes(self) -> set[Class]:
+        """set[Class]: Get all classes within the domain model."""
+        return {element for element in self.types if isinstance(element, Class)}
+
+    def get_class_by_name(self, class_name: str) -> Class:
+        """Class: Gets a class by name."""
+        return next(
+            (element for element in self.types if isinstance(element, Class) and
+             element.name == class_name), None
+            )
+
+    def classes_sorted_by_inheritance(self) -> list[Class]:
+        """list[Class]: Get the list of classes ordered by inheritance."""
+        from besser.utilities import sort_by_timestamp
+        classes = sort_by_timestamp(self.get_classes())
+        # Set up a dependency graph
+        child_map = {cl: set() for cl in classes}
+        # Populating the child_map based on generalizations (edges in top-sort graph)
+        for cl in classes:
+            for generalization in cl.generalizations:
+                child_map[generalization.general].add(cl)
+        # Helper function for DFS
+        def dfs(cl, visited, sorted_list):
+            visited.add(cl)
+            for child in child_map[cl]:
+                if child not in visited:
+                    dfs(child, visited, sorted_list)
+            sorted_list.append(cl)
+        # Perform DFS from each node that hasn't been visited yet
+        visited = set()
+        sorted_list = []
+        for cl in classes:
+            if cl not in visited:
+                dfs(cl, visited, sorted_list)
+        sorted_list.reverse()
+        return sorted_list
+
+    def validate(self, raise_exception: bool = True) -> dict:
+        """
+        Validate the domain model according to structural model constraints.
+
+        Args:
+            raise_exception (bool): If True, raise ValueError when validation fails.
+
+        Returns:
+            dict: Validation result with success flag, errors, and warnings.
+        """
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        self._validate_generalizations(errors)
+        self._validate_associations(errors)
+        self._validate_multiplicities(errors)
+        self._validate_constraints(errors)
+        self._validate_circular_inheritance(errors)
+        self._validate_attribute_shadowing(errors)
+
+        result = {"success": len(errors) == 0, "errors": errors, "warnings": warnings}
+        if errors and raise_exception:
+            raise ValueError("\n".join(errors))
+        return result
+
+    def _validate_generalizations(self, errors: list[str]):
+        """Validate that generalizations reference types in the model."""
+        for generalization in self.__generalizations:
+            if generalization.general not in self.get_classes():
+                errors.append(
+                    f"Generalization references general class '{generalization.general.name}' "
+                    f"which is not in the domain model '{self.name}'."
+                )
+            if generalization.specific not in self.get_classes():
+                errors.append(
+                    f"Generalization references specific class '{generalization.specific.name}' "
+                    f"which is not in the domain model '{self.name}'."
+                )
+
+    def _validate_associations(self, errors: list[str]):
+        """Validate that association ends reference types in the model."""
+        for association in self.__associations:
+            for end in association.ends:
+                if end.type not in self.__types:
+                    errors.append(
+                        f"Association '{association.name}' has end '{end.name}' "
+                        f"referencing type '{end.type.name}' which is not in the domain model '{self.name}'."
+                    )
+
+    def _validate_multiplicities(self, errors: list[str]):
+        """Validate that multiplicities on association ends and attributes are well-formed."""
+        for association in self.__associations:
+            for end in association.ends:
+                mult = end.multiplicity
+                if mult.min < 0:
+                    errors.append(
+                        f"Association '{association.name}', end '{end.name}': "
+                        f"min multiplicity ({mult.min}) cannot be negative."
+                    )
+                if mult.max <= 0:
+                    errors.append(
+                        f"Association '{association.name}', end '{end.name}': "
+                        f"max multiplicity ({mult.max}) must be greater than 0."
+                    )
+                if mult.min > mult.max:
+                    errors.append(
+                        f"Association '{association.name}', end '{end.name}': "
+                        f"min multiplicity ({mult.min}) cannot exceed max ({mult.max})."
+                    )
+
+    def _validate_constraints(self, errors: list[str]):
+        """Validate that constraint contexts reference classes in the model."""
+        for constraint in self.__constraints:
+            if constraint.context not in self.get_classes():
+                errors.append(
+                    f"Constraint '{constraint.name}' references context class '{constraint.context.name}' "
+                    f"which is not in the domain model '{self.name}'."
+                )
+
+    def _validate_circular_inheritance(self, errors: list[str]):
+        """Detect circular inheritance in the class hierarchy."""
+        def has_cycle(cls: Class, visited: set, rec_stack: set) -> bool:
+            visited.add(cls)
+            rec_stack.add(cls)
+
+            for parent in cls.parents():
+                if parent not in visited:
+                    if has_cycle(parent, visited, rec_stack):
+                        return True
+                elif parent in rec_stack:
+                    return True
+
+            rec_stack.remove(cls)
+            return False
+
+        visited = set()
+        for cls in self.get_classes():
+            if cls not in visited:
+                if has_cycle(cls, visited, set()):
+                    errors.append(
+                        f"Circular inheritance detected involving class '{cls.name}'."
+                    )
+
+    def _validate_attribute_shadowing(self, errors: list[str]):
+        """Validate that subclass attributes do not shadow inherited attributes."""
+        for cls in self.get_classes():
+            inherited_names = {attr.name for attr in cls.inherited_attributes()}
+            for attr in cls.attributes:
+                if attr.name in inherited_names:
+                    errors.append(
+                        f"Class '{cls.name}' defines attribute '{attr.name}' "
+                        f"which already exists in a parent class."
+                    )
+
+    def __repr__(self):
+        return (
+            f'DomainModel({self.name}, {self.types}, {self.associations}, {self.generalizations}, '
+            f'{self.packages}, {self.constraints}, {self.timestamp}, {self.metadata},'
+            f'is_derived={self.is_derived})'
+        )

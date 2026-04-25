@@ -1,0 +1,69 @@
+CLI Reference
+=============
+
+Root scripts
+------------
+
+``package.json`` at the workspace root defines scripts that orchestrate the
+packages via npm workspaces.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Script
+     - Description
+   * - ``npm run dev``
+     - Runs the webapp2 Vite dev server (alias for ``npm run start --workspace=webapp2``).
+   * - ``npm run start``
+     - Runs the webapp2 Vite dev server and Express server concurrently.
+   * - ``npm run start:webapp2``
+     - Alias for ``npm run start --workspace=webapp2``.
+   * - ``npm run start:server``
+     - Launches the Express server with ``tsx watch``.
+   * - ``npm run build``
+     - Produces production bundles for the webapp and server.
+   * - ``npm run build:local``
+     - Similar to ``build`` but bundles the webapp with a local ``DEPLOYMENT_URL``.
+   * - ``npm run build:webapp2``
+     - Runs the webapp2 production Vite build.
+   * - ``npm run build:webapp2:local``
+     - Builds the webapp2 with ``DEPLOYMENT_URL=http://localhost:8080``.
+   * - ``npm run build:server``
+     - Bundles the Express server via webpack.
+   * - ``npm run lint``
+     - Runs ESLint for the webapp and server packages.
+   * - ``npm run lint:webapp2``
+     - Runs ESLint in the webapp2 workspace.
+   * - ``npm run lint:server``
+     - Runs ESLint in the server workspace.
+   * - ``npm run prettier:check``
+     - Validates formatting across all packages.
+   * - ``npm run prettier:write``
+     - Applies formatting fixes.
+   * - ``npm run update``
+     - Uses ``npm-check-updates`` to refresh dependency versions interactively.
+
+Package-specific scripts
+------------------------
+
+Editor (``packages/editor``)
+   * ``npm run lint`` – ESLint for the editor package.
+   * ``npm run lint:ts`` / ``lint:css`` – TypeScript and styled-components linting.
+   * ``npm run prettier:*`` – Formatting helpers scoped to the editor source.
+
+Webapp (``packages/webapp2``)
+   * ``npm run start`` – Vite dev server.
+   * ``npm run build`` – Production bundle under ``build/webapp2``.
+   * ``npm run build:local`` – Production bundle with local deployment URL.
+   * ``npm run lint`` – ESLint across TypeScript sources.
+
+Server (``packages/server``)
+   * ``npm run start`` – ``tsx watch`` hot-reloading server on port 8080.
+   * ``npm run build`` – Webpack bundle of the Express server.
+   * ``npm run lint`` – ESLint across TypeScript sources.
+
+Documentation (``docs``)
+   * ``make html`` – Builds Sphinx docs into ``docs/build/html``.
+   * ``make livehtml`` – Optional live-reload server (requires ``sphinx-autobuild``).
+
