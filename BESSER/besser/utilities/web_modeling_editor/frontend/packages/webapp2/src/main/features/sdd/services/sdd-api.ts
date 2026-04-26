@@ -47,7 +47,7 @@ export interface SpecFile {
 }
 
 export interface SddEvent {
-  type: 'phase_start' | 'output' | 'phase_complete' | 'error' | 'status' | 'specs' | 'process_done' | 'pong';
+  type: 'phase_start' | 'output' | 'phase_complete' | 'error' | 'status' | 'specs' | 'process_done' | 'pong' | 'waiting_input' | 'session_ended';
   phase?: string;
   data?: string;
   files?: string[];

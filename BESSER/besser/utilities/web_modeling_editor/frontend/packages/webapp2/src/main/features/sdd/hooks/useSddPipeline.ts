@@ -3,6 +3,7 @@
  *
  * **Persistence:** All important state survives panel close/reopen via localStorage.
  * **Interactive:** Supports sending text input to gemini for answering questions.
+ * **Auto-advance:** Feature name is auto-derived from idea by the server.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,6 +31,8 @@ export type SddPhase =
 export interface SddPipelineState {
   isInstalled: boolean;
   isRunning: boolean;
+  /** True when gemini is idle and waiting for user input */
+  waitingInput: boolean;
   phase: SddPhase;
   currentFeature: string;
   output: string;
@@ -39,7 +42,6 @@ export interface SddPipelineState {
   isConnected: boolean;
   lastGeneratedFiles: string[];
   ideaText: string;
-  featureText: string;
   /** Cached spec files: key = "specName/filename", value = content */
   fileCache: Record<string, string>;
   /** File currently open for viewing */
@@ -57,7 +59,8 @@ export interface SddPipelineActions {
   refreshStatus: () => Promise<void>;
   reset: () => void;
   setIdeaText: (text: string) => void;
-  setFeatureText: (text: string) => void;
+  /** Mark the current phase as completed and advance */
+  markPhaseComplete: () => void;
   /** Open a spec file for viewing */
   openSpecFile: (spec: string, file: string) => void;
   /** Close the spec file viewer */
@@ -76,7 +79,6 @@ interface PersistedState {
   completedPhases: string[];
   currentFeature: string;
   ideaText: string;
-  featureText: string;
   output: string;
   lastGeneratedFiles: string[];
 }
@@ -126,9 +128,9 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
   const cachedFiles = useRef(loadFileCache());
 
   const [state, setState] = useState<SddPipelineState>(() => ({
-    // Use persisted isInstalled — fixes the "not installed" flicker bug
-    isInstalled: persisted.current.isInstalled ?? false,
+    isInstalled: persisted.current.isInstalled ?? true, // Default to true
     isRunning: false,
+    waitingInput: false,
     phase: 'idle',
     currentFeature: persisted.current.currentFeature ?? '',
     output: persisted.current.output ?? '',
@@ -138,7 +140,6 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
     isConnected: false,
     lastGeneratedFiles: persisted.current.lastGeneratedFiles ?? [],
     ideaText: persisted.current.ideaText ?? '',
-    featureText: persisted.current.featureText ?? '',
     fileCache: cachedFiles.current,
     openFile: null,
   }));
@@ -156,7 +157,6 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
       completedPhases: state.completedPhases,
       currentFeature: state.currentFeature,
       ideaText: state.ideaText,
-      featureText: state.featureText,
       output: state.output.slice(-15000),
       lastGeneratedFiles: state.lastGeneratedFiles,
     });
@@ -165,12 +165,11 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
     state.completedPhases,
     state.currentFeature,
     state.ideaText,
-    state.featureText,
     state.output,
     state.lastGeneratedFiles,
   ]);
 
-  // Persist file cache separately (can be larger)
+  // Persist file cache separately
   useEffect(() => {
     saveFileCache(state.fileCache);
   }, [state.fileCache]);
@@ -214,8 +213,9 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
         setState((prev) => ({
           ...prev,
           isRunning: true,
+          waitingInput: false,
           phase: (event.phase as SddPhase) || prev.phase,
-          currentFeature: (event.feature as string) || (event.idea as string) || prev.currentFeature,
+          currentFeature: (event.feature as string) || prev.currentFeature,
           output: '',
           error: null,
           lastGeneratedFiles: [],
@@ -227,6 +227,15 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
         setState((prev) => ({
           ...prev,
           output: outputRef.current,
+          waitingInput: false, // Got output → not waiting anymore
+        }));
+        break;
+
+      case 'waiting_input':
+        // Gemini is idle and waiting for user response
+        setState((prev) => ({
+          ...prev,
+          waitingInput: true,
         }));
         break;
 
@@ -234,13 +243,45 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
         setState((prev) => ({
           ...prev,
           isRunning: false,
+          waitingInput: false,
           phase: 'idle',
           completedPhases: event.phase
             ? [...new Set([...prev.completedPhases, event.phase])]
             : prev.completedPhases,
           lastGeneratedFiles: (event.files as string[]) || [],
         }));
-        // Refresh specs after completion
+        // Refresh specs
+        sddApi.listSpecs().then(({ specs }) => {
+          setState((prev) => ({ ...prev, specs }));
+        }).catch(console.error);
+        break;
+
+      case 'process_done':
+        // Gemini process finished this invocation.
+        // DON'T auto-complete the phase — user may need to respond to
+        // questions. Keep the input visible via waitingInput: true.
+        setState((prev) => ({
+          ...prev,
+          isRunning: false,
+          waitingInput: true, // Keep input visible for follow-up
+        }));
+        // Refresh specs in case files were generated
+        sddApi.listSpecs().then(({ specs }) => {
+          setState((prev) => ({ ...prev, specs }));
+        }).catch(console.error);
+        break;
+
+      case 'session_ended':
+        // The gemini session exited completely
+        setState((prev) => ({
+          ...prev,
+          isRunning: false,
+          waitingInput: false,
+          completedPhases: prev.phase !== 'idle'
+            ? [...new Set([...prev.completedPhases, prev.phase])]
+            : prev.completedPhases,
+          phase: 'idle',
+        }));
         sddApi.listSpecs().then(({ specs }) => {
           setState((prev) => ({ ...prev, specs }));
         }).catch(console.error);
@@ -250,6 +291,7 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
         setState((prev) => ({
           ...prev,
           isRunning: false,
+          waitingInput: false,
           error: event.error || 'Error desconocido',
         }));
         break;
@@ -258,8 +300,6 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
         const status = event as unknown as SddStatus;
         setState((prev) => ({
           ...prev,
-          // Only update isInstalled if the server confirms it's true,
-          // or if we're certain it's false (not a network error)
           isInstalled: status.installed ?? prev.isInstalled,
           specs: status.specs ?? prev.specs,
           phase: (status.pipeline?.phase as SddPhase) ?? prev.phase,
@@ -282,24 +322,7 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
         break;
       }
 
-      case 'process_done':
-        // Gemini process finished — mark current phase as completed
-        setState((prev) => ({
-          ...prev,
-          isRunning: false,
-          completedPhases: prev.phase !== 'idle'
-            ? [...new Set([...prev.completedPhases, prev.phase])]
-            : prev.completedPhases,
-          phase: 'idle',
-        }));
-        // Refresh specs from the REST API
-        sddApi.listSpecs().then(({ specs }) => {
-          setState((prev) => ({ ...prev, specs }));
-        }).catch(console.error);
-        break;
-
       case 'pong':
-        // Heartbeat response — ignore
         break;
     }
   }, []);
@@ -367,7 +390,6 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
         error: status.pipeline.error || null,
       }));
     } catch {
-      // Don't reset isInstalled on network error — keeps persisted value
       console.warn('[SDD] Status refresh failed — using cached state');
     }
   }, []);
@@ -379,16 +401,16 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
     setState((prev) => ({
       isInstalled: prev.isInstalled,
       isRunning: false,
+      waitingInput: false,
       phase: 'idle',
       currentFeature: '',
       output: '',
       completedPhases: [],
-      specs: prev.specs,
+      specs: [],
       error: null,
       isConnected: prev.isConnected,
       lastGeneratedFiles: [],
       ideaText: '',
-      featureText: '',
       fileCache: {},
       openFile: null,
     }));
@@ -398,29 +420,27 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
     setState((prev) => ({ ...prev, ideaText: text }));
   }, []);
 
-  const setFeatureText = useCallback((text: string) => {
-    setState((prev) => ({ ...prev, featureText: text }));
-  }, []);
-
   const openSpecFile = useCallback((spec: string, file: string) => {
-    // Fetch and cache the file content
-    sddApi.getSpecFile(spec, file).then((f) => {
-      const key = `${spec}/${file}`;
-      setState((prev) => ({
-        ...prev,
-        openFile: { spec, file },
-        fileCache: { ...prev.fileCache, [key]: f.content },
-      }));
-    }).catch(console.error);
-    // Set immediately with cached content if available
-    setState((prev) => ({
-      ...prev,
-      openFile: { spec, file },
-    }));
+    setState((prev) => ({ ...prev, openFile: { spec, file } }));
   }, []);
 
   const closeSpecFile = useCallback(() => {
     setState((prev) => ({ ...prev, openFile: null }));
+  }, []);
+
+  const markPhaseComplete = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isRunning: false,
+      waitingInput: false,
+      completedPhases: prev.phase !== 'idle'
+        ? [...new Set([...prev.completedPhases, prev.phase])]
+        : prev.completedPhases,
+      phase: 'idle',
+    }));
+    sddApi.listSpecs().then(({ specs }) => {
+      setState((prev) => ({ ...prev, specs }));
+    }).catch(console.error);
   }, []);
 
   // Load initial status
@@ -440,7 +460,7 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
       refreshStatus,
       reset,
       setIdeaText,
-      setFeatureText,
+      markPhaseComplete,
       openSpecFile,
       closeSpecFile,
     },
