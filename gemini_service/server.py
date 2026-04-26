@@ -117,6 +117,10 @@ async def handler(ws):
         if streaming_task is None or streaming_task.done():
             streaming_task = asyncio.create_task(stream_output(ws))
 
+    # If the client reconnects while gemini is still running, resume streaming.
+    if bridge.is_running:
+        ensure_streaming()
+
     try:
         async for raw in ws:
             try:
@@ -139,6 +143,7 @@ async def handler(ws):
                 text = msg.get("text", "")
                 if text:
                     await asyncio.to_thread(bridge.send_input, text)
+                    ensure_streaming()
 
             elif action == "discovery":
                 idea = msg.get("idea", "")
