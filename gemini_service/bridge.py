@@ -11,7 +11,6 @@ with "AttachConsole failed" on Windows if it is run without a real console buffe
 import os
 import re
 import sys
-import shutil
 import threading
 import time
 from pathlib import Path
@@ -107,7 +106,9 @@ class GeminiBridge:
             env["PYTHONIOENCODING"] = "utf-8"
 
             # Construct the command line
-            cmd = "gemini --skip-trust --yolo"
+            # `--skip-trust` is not supported in current Gemini CLI versions.
+            # Workspace trust is handled via GEMINI_CLI_TRUST_WORKSPACE env var.
+            cmd = "gemini --yolo"
             
             if not start_new_session and self._has_session:
                 cmd += " --resume latest"
