@@ -439,6 +439,37 @@ def setup_modeling_agent(agent_dir, python_exec):
 
 
 # ──────────────────────────────────────────────────────────────────
+# CC-SDD (Spec-Driven Development) Skills
+# ──────────────────────────────────────────────────────────────────
+
+def install_sdd_skills(base_dir):
+    """Instala las skills de CC-SDD para Gemini CLI en sdd-workspace/."""
+    sdd_dir = base_dir / "sdd-workspace"
+    skills_dir = sdd_dir / ".gemini" / "skills"
+
+    if skills_dir.exists():
+        ok(f"CC-SDD ya instalado en {sdd_dir}")
+        return
+
+    sdd_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        run(
+            [NPX_CMD, "-y", "cc-sdd@latest", "--gemini-skills", "--lang", "es"],
+            cwd=sdd_dir,
+        )
+        if skills_dir.exists():
+            ok(f"CC-SDD skills instaladas en {sdd_dir}")
+        else:
+            warn("npx cc-sdd se ejecutó pero no se encontraron skills. "
+                 "Verifica que Node.js >= 18 y npx están disponibles.")
+    except Exception as exc:
+        warn(f"No se pudo instalar CC-SDD: {exc}\n"
+             f"   Puedes instalarlo manualmente:\n"
+             f"   cd {sdd_dir} && npx cc-sdd@latest --gemini-skills --lang es")
+
+
+# ──────────────────────────────────────────────────────────────────
 # Resumen final
 # ──────────────────────────────────────────────────────────────────
 
@@ -479,6 +510,9 @@ def print_summary(base_dir):
   |   |-- venv{sep}                 Python 3.12 environment para back
   |-- modeling-agent{sep}           Modeling Agent (WebSocket)
   |   |-- venv{sep}                 Python 3.12 environment para el agente
+  |-- sdd-workspace{sep}            CC-SDD Skills + Specs (Gemini CLI)
+  |   |-- .gemini{sep}skills{sep}   17 Kiro-style Agent Skills
+  |   |-- .kiro{sep}                Specs, Steering, Settings
   |-- setup_besser.py           (este script)
   |-- run_besser.py             (script para levantar los servidores)
 """)
@@ -525,6 +559,9 @@ def main():
     step("Clonando y configurando el Modeling Agent")
     agent_dir = clone_modeling_agent(base_dir)
     setup_modeling_agent(agent_dir, python_exec)
+
+    step("Instalando CC-SDD (Spec-Driven Development) Skills")
+    install_sdd_skills(base_dir)
 
     print_summary(base_dir)
 

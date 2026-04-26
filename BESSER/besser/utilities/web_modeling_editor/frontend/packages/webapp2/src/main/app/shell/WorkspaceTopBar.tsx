@@ -54,6 +54,7 @@ const WorkspaceTopBarInner: React.FC<WorkspaceTopBarProps> = ({
   projectNameDraft,
   onProjectNameDraftChange,
   onProjectRename,
+  onOpenSddPanel,
 }) => {
   return (
     <header className={`relative z-20 animate-slide-in-down px-4 py-2 sm:px-6 ${headerBackgroundClass}`}>
@@ -115,6 +116,18 @@ const WorkspaceTopBarInner: React.FC<WorkspaceTopBarProps> = ({
             onGitHubLogin={onGitHubLogin}
             onOpenDeployDialog={onOpenDeployDialog}
           />
+          {onOpenSddPanel && (
+            <button
+              type="button"
+              onClick={onOpenSddPanel}
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${outlineButtonClass} hover:shadow-md hover:shadow-purple-500/10 bg-gradient-to-r from-purple-500/[0.07] to-blue-500/[0.07]`}
+              aria-label="Abrir CC-SDD Studio"
+              id="sdd-panel-toggle"
+            >
+              <span>🧠</span>
+              <span className="hidden lg:inline">CC-SDD</span>
+            </button>
+          )}
           <CommunityMenu
             outlineButtonClass={outlineButtonClass}
             onOpenFeedback={onOpenFeedback}

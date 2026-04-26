@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════╗
-║        BESSER + AI-SDD  —  Script de Inicio Rápido          ║
+║        BESSER + CC-SDD  —  Script de Inicio Rápido          ║
 ╚══════════════════════════════════════════════════════════════╝
 
-Abre 3 terminales (una por servicio):
+Abre 4 terminales (una por servicio):
   1. Backend  (FastAPI)       → http://localhost:9000/besser_api
   2. Frontend (React/Webpack) → http://localhost:8080
   3. Modeling Agent (WS)      → ws://localhost:8765
+  4. Gemini Service (WS)      → ws://localhost:9001
 
 Uso:
   python start_besser.py
@@ -28,6 +29,7 @@ B = "\033[1m";  M = "\033[95m"; RESET = "\033[0m"
 BASE       = Path(__file__).resolve().parent
 BESSER     = BASE / "BESSER"
 AGENT      = BASE / "modeling-agent"
+SDD_WORK   = BASE / "sdd-workspace"
 FRONTEND   = BESSER / "besser" / "utilities" / "web_modeling_editor" / "frontend"
 PY_BACK    = BESSER / "venv" / "Scripts" / "python.exe"
 PY_AGENT   = AGENT  / "venv" / "Scripts" / "python.exe"
@@ -66,7 +68,7 @@ def main():
     print(f"""
 {C}{B}
 ╔══════════════════════════════════════════════════════════════╗
-║        BESSER + AI-SDD  —  Script de Inicio Rápido          ║
+║        BESSER + CC-SDD  —  Script de Inicio Rápido          ║
 ╚══════════════════════════════════════════════════════════════╝
 {RESET}""")
 
@@ -76,6 +78,7 @@ def main():
     print(f"\n{B}▶ Abriendo Backend...{RESET}")
     open_terminal(
         "BESSER | Backend (puerto 9000)",
+        f'set "SDD_WORK_DIR={SDD_WORK}" && '
         f'"{PY_BACK}" -m uvicorn '
         f'besser.utilities.web_modeling_editor.backend.backend:app '
         f'--reload --port 9000',
@@ -108,39 +111,37 @@ def main():
         AGENT,
     )
     ok("Agent  → ws://localhost:8765")
+    time.sleep(1)
+
+    # 4) Gemini Service
+    print(f"{B}▶ Abriendo Gemini Service...{RESET}")
+    open_terminal(
+        "CC-SDD | Gemini Service (WS 9001)",
+        f'set "SDD_WORK_DIR={SDD_WORK}" && '
+        f'set "PYTHONPATH={BASE}" && '
+        f'"{PY_BACK}" -m gemini_service.server',
+        BASE,
+    )
+    ok("Gemini → ws://localhost:9001")
 
     # Resumen
     print(f"""
 {G}{B}
 ══════════════════════════════════════════════════════════════
-   ✅  3 terminales abiertas — servicios arrancando
+   ✅  4 terminales abiertas — servicios arrancando
 ══════════════════════════════════════════════════════════════
 {RESET}
   {C}Backend {RESET} → http://localhost:9000/besser_api/docs
   {M}Frontend{RESET} → http://localhost:8080
   {G}Agent   {RESET} → ws://localhost:8765
+  {Y}Gemini  {RESET} → ws://localhost:9001
 
-  {Y}⚡ AI-SDD endpoints:{RESET}
-     GET  /besser_api/sdd/status
-     POST /besser_api/sdd/config      ← {{api_key: "tu-key"}}
-     POST /besser_api/sdd/generate    ← {{idea: "tu idea"}}
-     POST /besser_api/sdd/vibe-modeling
-     POST /besser_api/sdd/sync-traceability
-
-  {Y}Para probar SDD desde el navegador:{RESET}
+  {Y}⚡ CC-SDD Studio:{RESET}
      1. Abre http://localhost:8080
-     2. Click en el botón ⚡ (barra superior)
-     3. Configura tu API Key de Gemini
-     4. Escribe una idea y genera
-
-  {Y}Para probar SDD desde terminal (curl):{RESET}
-     curl -X POST http://localhost:9000/besser_api/sdd/config \\
-       -H "Content-Type: application/json" \\
-       -d '{{"api_key":"TU_GEMINI_KEY"}}'
-
-     curl -X POST http://localhost:9000/besser_api/sdd/generate \\
-       -H "Content-Type: application/json" \\
-       -d '{{"idea":"Sistema de gestión de pedidos con clientes y productos"}}'
+     2. Click en el botón 🧠 CC-SDD (barra superior)
+     3. Escribe tu idea y ejecuta Discovery
+     4. Responde a las preguntas del agente en la terminal
+     5. Los specs se generan en sdd-workspace/.kiro/specs/
 
   {Y}Cierra cada ventana de terminal para detener su servicio.{RESET}
 """)

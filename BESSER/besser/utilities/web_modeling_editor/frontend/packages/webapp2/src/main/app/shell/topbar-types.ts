@@ -46,4 +46,5 @@ export interface WorkspaceTopBarProps {
   projectNameDraft: string;
   onProjectNameDraftChange: (value: string) => void;
   onProjectRename: () => void;
+  onOpenSddPanel?: () => void;
 }

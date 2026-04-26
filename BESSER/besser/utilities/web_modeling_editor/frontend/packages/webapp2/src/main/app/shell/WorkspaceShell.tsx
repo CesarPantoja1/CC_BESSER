@@ -49,6 +49,9 @@ const FeedbackDialog = React.lazy(() =>
 const HelpGuideDialog = React.lazy(() =>
   import('../../shared/dialogs/HelpGuideDialog').then((m) => ({ default: m.HelpGuideDialog })),
 );
+const SddPanel = React.lazy(() =>
+  import('../../features/sdd/components/SddPanel').then((m) => ({ default: m.SddPanel })),
+);
 // The keyboard toggle hook must be imported eagerly (it registers a global listener).
 // KeyboardShortcutsDialog is imported statically alongside the hook to avoid Vite's
 // mixed static/dynamic import warning (the module is already in this chunk).
@@ -128,6 +131,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   const [isDarkTheme, setIsDarkTheme] = useState<boolean>(() => isDarkThemeEnabled());
   const [isGitHubSidebarOpen, setIsGitHubSidebarOpen] = useState(false);
   const [isAssistantWorkspaceOpen, setIsAssistantWorkspaceOpen] = useState(false);
+  const [isSddPanelOpen, setIsSddPanelOpen] = useState(false);
 
   // Derived values
   const activeUmlType = useMemo(
@@ -486,6 +490,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
         projectNameDraft={projectNameDraft}
         onProjectNameDraftChange={setProjectNameDraft}
         onProjectRename={handleProjectRename}
+        onOpenSddPanel={() => setIsSddPanelOpen((prev) => !prev)}
       />
 
       {/* Mobile hamburger button - visible only below md breakpoint */}
@@ -568,11 +573,18 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           onToggleExpanded={() => setIsSidebarExpanded((previous) => !previous)}
         />
 
+        {/* CC-SDD Studio — LEFT panel (between sidebar and main content) */}
+        {isSddPanelOpen && (
+          <Suspense fallback={null}>
+            <SddPanel isOpen={isSddPanelOpen} onClose={() => setIsSddPanelOpen(false)} />
+          </Suspense>
+        )}
+
         <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {location.pathname === '/' && <DiagramTabs />}
           <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
 
-          {/* Onboarding checklist - fixed bottom-right */}
+          {/* Onboarding checklist - temporarily disabled (component not available)
           {onboarding && !onboarding.checklistDismissed && (
             <div className="absolute bottom-4 right-4 z-30 w-56">
               <OnboardingChecklist
@@ -585,6 +597,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
               />
             </div>
           )}
+          */}
         </main>
 
         <Suspense fallback={null}>

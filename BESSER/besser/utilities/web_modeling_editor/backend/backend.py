@@ -67,7 +67,11 @@ from besser.utilities.web_modeling_editor.backend.routers import (
     conversion_router,
     validation_router,
     deployment_router,
+    sdd_router,
 )
+
+# SDD shutdown hook
+from besser.utilities.web_modeling_editor.backend.routers.sdd_router import shutdown_sdd
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +174,9 @@ async def lifespan(_: FastAPI):
     except asyncio.CancelledError:
         pass
 
+    # Shutdown SDD gemini-cli subprocess if running
+    await shutdown_sdd()
+
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -208,6 +215,9 @@ app.include_router(generation_router.router)
 app.include_router(conversion_router.router)
 app.include_router(validation_router.router)
 app.include_router(deployment_router.router)
+
+# Include SDD (Spec-Driven Development) router
+app.include_router(sdd_router.router)
 
 
 # Exception handlers
@@ -261,7 +271,12 @@ def get_api_root():
             "get_json_model_from_kg": "/besser_api/get-json-model-from-kg",
             "transform_agent_model": "/besser_api/transform-agent-model-json",
             "feedback": "/besser_api/feedback",
-            "check_ocl": "/besser_api/check-ocl (deprecated, use validate-diagram)"
+            "check_ocl": "/besser_api/check-ocl (deprecated, use validate-diagram)",
+            "sdd_status": "/besser_api/sdd/status",
+            "sdd_discovery": "/besser_api/sdd/discovery",
+            "sdd_spec": "/besser_api/sdd/spec/{phase}",
+            "sdd_specs": "/besser_api/sdd/specs",
+            "sdd_ws": "/besser_api/sdd/ws (WebSocket)",
         }
     }
 

@@ -34,6 +34,15 @@ export default defineConfig(({ mode }) => {
         usePolling: true,
         interval: 300,
       },
+      proxy: {
+        // Proxy REST API calls to FastAPI backend (no WS here)
+        '/besser_api': {
+          target: 'http://localhost:9000',
+          changeOrigin: true,
+          // Only proxy WebSocket for the SDD endpoint, not for all /besser_api
+          ws: false,
+        },
+      },
     },
   };
 });
