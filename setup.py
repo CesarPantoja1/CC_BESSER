@@ -270,24 +270,15 @@ def create_venv(python_exec, venv_dir):
 
 
 # ──────────────────────────────────────────────────────────────────
-# Clonación y configuración de BESSER
+# Configuración de BESSER
 # ──────────────────────────────────────────────────────────────────
 
-BESSER_REPO         = "https://github.com/BESSER-PEARL/BESSER.git"
-MODELING_AGENT_REPO = "https://github.com/BESSER-PEARL/modeling-agent.git"
-
-
-def clone_besser(base_dir):
-    besser_dir = base_dir / "BESSER"
-    if besser_dir.exists():
-        warn("La carpeta BESSER ya existe. Se omite la clonación.")
-        warn("Si quieres reinstalar, elimina la carpeta manualmente.")
-        return besser_dir
-
-    print("  Clonando BESSER (puede tardar un momento)...")
-    run(["git", "clone", BESSER_REPO, str(besser_dir)])
-    ok("BESSER clonado correctamente")
-    return besser_dir
+def check_local_dir(dir_path, name):
+    if not dir_path.exists():
+        fatal(f"La carpeta '{name}' no existe en {dir_path}.\\n"
+              f"Asegúrate de ejecutar este script en la raíz que contiene '{name}'.")
+    ok(f"Carpeta {name} encontrada: {dir_path}")
+    return dir_path
 
 
 def init_submodules(besser_dir):
@@ -384,20 +375,8 @@ def install_frontend_dependencies(besser_dir):
     ok("Dependencias npm del frontend instaladas")
 
 
-# ──────────────────────────────────────────────────────────────────
 # Modeling Agent
 # ──────────────────────────────────────────────────────────────────
-
-def clone_modeling_agent(base_dir):
-    agent_dir = base_dir / "modeling-agent"
-    if agent_dir.exists():
-        warn("La carpeta modeling-agent ya existe. Se omite la clonación.")
-        return agent_dir
-
-    print("  Clonando modeling-agent...")
-    run(["git", "clone", MODELING_AGENT_REPO, str(agent_dir)])
-    ok("modeling-agent clonado correctamente")
-    return agent_dir
 
 
 def setup_modeling_agent(agent_dir, python_exec):
@@ -533,8 +512,9 @@ def main():
     check_node_npm()
     python_exec = find_python312()
 
-    step("Clonando BESSER Core + Web Modeling Editor")
-    besser_dir = clone_besser(base_dir)
+    step("Validando directorios locales")
+    besser_dir = check_local_dir(base_dir / "BESSER", "BESSER")
+    agent_dir = check_local_dir(base_dir / "modeling-agent", "modeling-agent")
 
     step("Inicializando submódulos del frontend")
     init_submodules(besser_dir)
@@ -556,8 +536,7 @@ def main():
     step("Instalando dependencias Node.js del frontend")
     install_frontend_dependencies(besser_dir)
 
-    step("Clonando y configurando el Modeling Agent")
-    agent_dir = clone_modeling_agent(base_dir)
+    step("Configurando el Modeling Agent")
     setup_modeling_agent(agent_dir, python_exec)
 
     step("Instalando CC-SDD (Spec-Driven Development) Skills")
