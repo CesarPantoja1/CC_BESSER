@@ -47,13 +47,18 @@ export interface SpecFile {
 }
 
 export interface SddEvent {
-  type: 'phase_start' | 'output' | 'phase_complete' | 'error' | 'status' | 'specs' | 'process_done' | 'pong' | 'waiting_input' | 'session_ended';
+  type: 'phase_start' | 'output' | 'phase_complete' | 'error' | 'status' | 'specs' | 'process_done' | 'pong' | 'waiting_input' | 'session_ended' | 'render_diagram' | 'sync_result' | 'workspace_set';
   phase?: string;
   data?: string;
   files?: string[];
   error?: string;
   feature?: string;
   idea?: string;
+  /** SystemSpec payload sent by the LangGraph agents */
+  systemSpec?: Record<string, unknown>;
+  /** Sync result status */
+  status?: string;
+  message?: string;
   [key: string]: unknown;
 }
 
@@ -272,5 +277,15 @@ export class SddWebSocket {
   /** Request specs list */
   requestSpecs(): void {
     this.send({ action: 'specs' });
+  }
+
+  /** Send current canvas diagram back for traceability sync */
+  syncDiagram(systemSpec: Record<string, unknown>, feature?: string): void {
+    this.send({ action: 'sync_diagram', systemSpec, feature });
+  }
+
+  /** Set the workspace folder for CC-SDD operations */
+  setWorkspace(path: string): void {
+    this.send({ action: 'set_workspace', path });
   }
 }

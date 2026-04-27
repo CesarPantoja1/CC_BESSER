@@ -33,6 +33,7 @@ SDD_WORK   = BASE / "sdd-workspace"
 FRONTEND   = BESSER / "besser" / "utilities" / "web_modeling_editor" / "frontend"
 PY_BACK    = BESSER / "venv" / "Scripts" / "python.exe"
 PY_AGENT   = AGENT  / "venv" / "Scripts" / "python.exe"
+PY_GEMINI  = BASE / "gemini_service" / "venv" / "Scripts" / "python.exe"
 NPM        = "npm.cmd" if platform.system() == "Windows" else "npm"
 
 
@@ -115,11 +116,21 @@ def main():
 
     # 4) Gemini Service
     print(f"{B}▶ Abriendo Gemini Service...{RESET}")
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    key_set = f'set "GEMINI_API_KEY={gemini_api_key}" && ' if gemini_api_key else ''
+    if not PY_GEMINI.exists():
+        warn(f"Python de gemini_service no encontrado: {PY_GEMINI}")
+        warn("Ejecuta primero: python setup.py (o crea el venv manualmente)")
+        warn("Usando Python del backend como fallback...")
+        py_gem = PY_BACK
+    else:
+        py_gem = PY_GEMINI
     open_terminal(
         "CC-SDD | Gemini Service (WS 9001)",
         f'set "SDD_WORK_DIR={SDD_WORK}" && '
         f'set "PYTHONPATH={BASE}" && '
-        f'"{PY_BACK}" -m gemini_service.server',
+        f'{key_set}'
+        f'"{py_gem}" -m gemini_service.server',
         BASE,
     )
     ok("Gemini → ws://localhost:9001")

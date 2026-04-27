@@ -363,7 +363,7 @@ def install_frontend_dependencies(besser_dir):
         return
 
     print("  Instalando dependencias npm del frontend (puede tardar varios minutos)...")
-    run([NPM_CMD, "install"], cwd=frontend_dir)
+    run([NPM_CMD, "install", "codemirror@5", "--legacy-peer-deps"], cwd=frontend_dir)
 
     print("  Ejecutando npm audit fix (no fatal si hay advertencias)...")
     subprocess.run(
@@ -446,6 +446,37 @@ def install_sdd_skills(base_dir):
         warn(f"No se pudo instalar CC-SDD: {exc}\n"
              f"   Puedes instalarlo manualmente:\n"
              f"   cd {sdd_dir} && npx cc-sdd@latest --gemini-skills --lang es")
+
+
+# ──────────────────────────────────────────────────────────────────
+# Gemini Service (CC-SDD LangGraph Agents)
+# ──────────────────────────────────────────────────────────────────
+
+def setup_gemini_service(base_dir, python_exec):
+    """Crea un venv propio para gemini_service e instala sus dependencias."""
+    gemini_dir = base_dir / "gemini_service"
+    venv_dir = gemini_dir / "venv"
+    create_venv(python_exec, venv_dir)
+    pip_exec = venv_pip(venv_dir)
+
+    req = gemini_dir / "requirements.txt"
+    if req.exists():
+        print("  Instalando dependencias de gemini_service...")
+        try:
+            run_pip(pip_exec, ["install", "-r", str(req)], cwd=gemini_dir)
+        except RuntimeError:
+            warn("Fallo con caché. Reintentando con --no-cache-dir...")
+            run_pip(
+                pip_exec,
+                ["install", "--no-cache-dir", "-r", str(req)],
+                cwd=gemini_dir,
+            )
+        ok("Dependencias de gemini_service instaladas")
+    else:
+        warn("requirements.txt de gemini_service no encontrado.")
+
+    print(f"\n  {YELLOW}⚠  RECUERDA configurar GEMINI_API_KEY:{RESET}")
+    print(f"     set GEMINI_API_KEY=tu_api_key_aqui")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -541,6 +572,9 @@ def main():
 
     step("Instalando CC-SDD (Spec-Driven Development) Skills")
     install_sdd_skills(base_dir)
+
+    step("Configurando Gemini Service (LangGraph Agents)")
+    setup_gemini_service(base_dir, python_exec)
 
     print_summary(base_dir)
 

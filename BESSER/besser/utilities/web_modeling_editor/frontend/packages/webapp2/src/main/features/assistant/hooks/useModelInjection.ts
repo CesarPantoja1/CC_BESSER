@@ -264,9 +264,9 @@ export function useModelInjection({
               typeof command.systemSpec === 'object' &&
               Array.isArray(
                 command.systemSpec.classes ??
-                  command.systemSpec.states ??
-                  command.systemSpec.objects ??
-                  command.systemSpec.intents,
+                command.systemSpec.states ??
+                command.systemSpec.objects ??
+                command.systemSpec.intents,
               )
             ) {
               const { ConverterFactory } = await import('../services/converters');

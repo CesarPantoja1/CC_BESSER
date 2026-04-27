@@ -46,6 +46,12 @@ export interface SddPipelineState {
   fileCache: Record<string, string>;
   /** File currently open for viewing */
   openFile: { spec: string; file: string } | null;
+  /** True while the sync_diagram action is running */
+  isSyncing: boolean;
+  /** Last sync result message */
+  syncMessage: string | null;
+  /** Current workspace folder path */
+  workspace: string;
 }
 
 export interface SddPipelineActions {
@@ -65,6 +71,12 @@ export interface SddPipelineActions {
   openSpecFile: (spec: string, file: string) => void;
   /** Close the spec file viewer */
   closeSpecFile: () => void;
+  /** Send current canvas diagram to gemini_service for traceability sync */
+  syncDiagram: (systemSpec: Record<string, unknown>) => void;
+  /** Explicitly trigger diagram generation via LangGraph agents */
+  generateDiagram: () => void;
+  /** Set the workspace folder for CC-SDD operations */
+  setWorkspace: (path: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +154,9 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
     ideaText: persisted.current.ideaText ?? '',
     fileCache: cachedFiles.current,
     openFile: null,
+    isSyncing: false,
+    syncMessage: null,
+    workspace: persisted.current.workspace ?? '',
   }));
 
   const wsRef = useRef<SddWebSocket | null>(null);
@@ -323,6 +338,39 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
       }
 
       case 'pong':
+        if (event.workspace) {
+          setState((prev) => ({ ...prev, workspace: event.workspace as string }));
+        }
+        break;
+
+      case 'render_diagram':
+        // LangGraph agents produced a class diagram — dispatch to BESSER canvas
+        if (event.systemSpec) {
+          window.dispatchEvent(
+            new CustomEvent('wme:inject-sdd-diagram', {
+              detail: { systemSpec: event.systemSpec },
+            }),
+          );
+        }
+        break;
+
+      case 'sync_result':
+        setState((prev) => ({
+          ...prev,
+          isSyncing: false,
+          syncMessage: (event.message as string) || 'Sincronización completada',
+        }));
+        // Refresh specs after sync
+        sddApi.listSpecs().then(({ specs }) => {
+          setState((prev) => ({ ...prev, specs }));
+        }).catch(console.error);
+        break;
+
+      case 'workspace_set':
+        setState((prev) => ({
+          ...prev,
+          workspace: (event.path as string) || prev.workspace,
+        }));
         break;
     }
   }, []);
@@ -413,6 +461,8 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
       ideaText: '',
       fileCache: {},
       openFile: null,
+      isSyncing: false,
+      syncMessage: null,
     }));
   }, []);
 
@@ -443,6 +493,19 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
     }).catch(console.error);
   }, []);
 
+  const syncDiagram = useCallback((systemSpec: Record<string, unknown>) => {
+    setState((prev) => ({ ...prev, isSyncing: true, syncMessage: null }));
+    wsRef.current?.syncDiagram(systemSpec, state.currentFeature);
+  }, [state.currentFeature]);
+
+  const generateDiagram = useCallback(() => {
+    wsRef.current?.send({ action: 'generate_diagram', feature: state.currentFeature });
+  }, [state.currentFeature]);
+
+  const setWorkspace = useCallback((path: string) => {
+    wsRef.current?.setWorkspace(path);
+  }, []);
+
   // Load initial status
   useEffect(() => {
     refreshStatus();
@@ -463,6 +526,9 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
       markPhaseComplete,
       openSpecFile,
       closeSpecFile,
+      syncDiagram,
+      generateDiagram,
+      setWorkspace,
     },
   ];
 }

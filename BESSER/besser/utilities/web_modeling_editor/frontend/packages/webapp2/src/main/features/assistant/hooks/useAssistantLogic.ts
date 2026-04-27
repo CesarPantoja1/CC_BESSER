@@ -182,6 +182,112 @@ const waitForSwitchRender = (): Promise<void> =>
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
   });
 
+/**
+ * Reverse-engineer a BESSER Apollon model back into the simplified
+ * SystemSpec format (classes + relationships) so it can be sent to
+ * gemini_service for diffing against diagram.json.
+ */
+const extractSystemSpecFromModel = (model: any): Record<string, unknown> => {
+  if (!model || typeof model !== 'object') {
+    return { systemName: 'Unknown', classes: [], relationships: [] };
+  }
+
+  const elements = model.elements || {};
+  const relationships = model.relationships || {};
+
+  // Build a map of element id → element
+  const idToElement: Record<string, any> = {};
+  for (const [id, el] of Object.entries(elements)) {
+    idToElement[id] = { ...(el as any), id };
+  }
+
+  // Identify top-level classes (owner === null)
+  const classElements = Object.values(idToElement).filter(
+    (el: any) => el.type === 'Class' || el.type === 'AbstractClass' || el.type === 'Interface' || el.type === 'Enumeration',
+  );
+
+  const classIdToName: Record<string, string> = {};
+  const classes: Array<Record<string, unknown>> = [];
+
+  for (const cls of classElements) {
+    const el = cls as any;
+    classIdToName[el.id] = el.name || 'UnknownClass';
+
+    // Find attributes (children with owner === this class's id)
+    const attrs = (el.attributes || [])
+      .map((attrId: string) => idToElement[attrId])
+      .filter(Boolean)
+      .map((attr: any) => ({
+        name: attr.name || 'unknownAttr',
+        type: attr.attributeType || 'str',
+        visibility: attr.visibility || 'public',
+      }));
+
+    // Find methods
+    const methods = (el.methods || [])
+      .map((methodId: string) => idToElement[methodId])
+      .filter(Boolean)
+      .map((method: any) => {
+        const rawName = method.name || 'unknownMethod';
+        // Parse parameters from name like "doSomething(param1: str, param2: int)"
+        const match = rawName.match(/^([^(]+)\(([^)]*)\)/);
+        const methodName = match ? match[1].trim() : rawName;
+        const paramStr = match ? match[2] : '';
+        const parameters = paramStr
+          .split(',')
+          .filter((p: string) => p.trim())
+          .map((p: string) => {
+            const parts = p.trim().split(':').map((s: string) => s.trim());
+            return { name: parts[0] || 'arg', type: parts[1] || 'any' };
+          });
+
+        return {
+          name: methodName,
+          returnType: method.attributeType || 'void',
+          visibility: method.visibility || 'public',
+          parameters,
+        };
+      });
+
+    classes.push({
+      className: el.name || 'UnknownClass',
+      attributes: attrs,
+      methods,
+    });
+  }
+
+  // Convert relationships
+  const rels: Array<Record<string, unknown>> = [];
+  for (const [, rel] of Object.entries(relationships)) {
+    const r = rel as any;
+    const sourceId = r.source?.element;
+    const targetId = r.target?.element;
+    const sourceName = classIdToName[sourceId];
+    const targetName = classIdToName[targetId];
+    if (!sourceName || !targetName) continue;
+
+    let relType = 'Association';
+    if (r.type === 'ClassInheritance') relType = 'Inheritance';
+    else if (r.type === 'ClassComposition') relType = 'Composition';
+    else if (r.type === 'ClassAggregation') relType = 'Aggregation';
+
+    rels.push({
+      type: relType,
+      sourceClass: sourceName,
+      targetClass: targetName,
+      sourceMultiplicity: r.source?.multiplicity || '1',
+      targetMultiplicity: r.target?.multiplicity || '1',
+      name: r.name || '',
+    });
+  }
+
+  return {
+    systemName: 'BESSERDiagram',
+    classes,
+    relationships: rels,
+  };
+};
+
 /* ------------------------------------------------------------------ */
 /*  Hook                                                               */
 /* ------------------------------------------------------------------ */
@@ -312,22 +418,22 @@ export function useAssistantLogic({
 
     const diagramSummaries = project
       ? Object.entries(project.diagrams).flatMap(([diagramType, diagramArr]) => {
-          if (!Array.isArray(diagramArr)) return [];
-          return (diagramArr as ProjectDiagram[]).map((d) => ({
-            type: diagramType,
-            diagramId: d.id,
-            title: d.title,
-          }));
-        })
+        if (!Array.isArray(diagramArr)) return [];
+        return (diagramArr as ProjectDiagram[]).map((d) => ({
+          type: diagramType,
+          diagramId: d.id,
+          title: d.title,
+        }));
+      })
       : [];
 
     const projectMetadata = project
       ? {
-          totalDiagrams: Object.values(project.diagrams).flat().length,
-          diagramTypes: Object.keys(project.diagrams).filter(
-            (type) => (project.diagrams as Record<string, any[]>)[type]?.length > 0,
-          ),
-        }
+        totalDiagrams: Object.values(project.diagrams).flat().length,
+        diagramTypes: Object.keys(project.diagrams).filter(
+          (type) => (project.diagrams as Record<string, any[]>)[type]?.length > 0,
+        ),
+      }
       : undefined;
 
     return {
@@ -612,6 +718,53 @@ export function useAssistantLogic({
     // handlers here since they depend on orchestrator state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assistantClient]);
+
+  /* ================================================================ */
+  /*  SDD ↔ BESSER event bridges                                      */
+  /* ================================================================ */
+
+  // Bridge 1: Receive LangGraph-generated diagram and inject into canvas
+  useEffect(() => {
+    const handleSddDiagram = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.systemSpec) {
+        enqueueAssistantTask(() =>
+          injection.handleInjection({
+            action: 'inject_complete_system',
+            systemSpec: customEvent.detail.systemSpec,
+            diagramType: 'ClassDiagram',
+          }),
+        );
+      }
+    };
+    window.addEventListener('wme:inject-sdd-diagram', handleSddDiagram);
+    return () => {
+      window.removeEventListener('wme:inject-sdd-diagram', handleSddDiagram);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Bridge 2: Respond to SddPanel's request for the current canvas model
+  // (used by the "Sync Diagram" button to send model back to gemini_service)
+  useEffect(() => {
+    const handleModelRequest = () => {
+      const model = currentModelRef.current;
+      if (model) {
+        // Reverse-engineer a simplified SystemSpec from the BESSER model
+        // so gemini_service can diff it against diagram.json
+        const systemSpec = extractSystemSpecFromModel(model);
+        window.dispatchEvent(
+          new CustomEvent('wme:sdd-model-response', {
+            detail: { model: systemSpec },
+          }),
+        );
+      }
+    };
+    window.addEventListener('wme:sdd-request-model', handleModelRequest);
+    return () => {
+      window.removeEventListener('wme:sdd-request-model', handleModelRequest);
+    };
+  }, []);
 
   /* ================================================================ */
   /*  handleSubmit                                                     */
