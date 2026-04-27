@@ -77,6 +77,8 @@ export interface SddPipelineActions {
   generateDiagram: () => void;
   /** Set the workspace folder for CC-SDD operations */
   setWorkspace: (path: string) => void;
+  /** Export diagram.json to the BESSER editor canvas */
+  exportDiagramToEditor: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -506,6 +508,10 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
     wsRef.current?.setWorkspace(path);
   }, []);
 
+  const exportDiagramToEditor = useCallback(() => {
+    wsRef.current?.exportDiagramToEditor(state.currentFeature);
+  }, [state.currentFeature]);
+
   // Load initial status
   useEffect(() => {
     refreshStatus();
@@ -529,6 +535,7 @@ export function useSddPipeline(): [SddPipelineState, SddPipelineActions] {
       syncDiagram,
       generateDiagram,
       setWorkspace,
+      exportDiagramToEditor,
     },
   ];
 }

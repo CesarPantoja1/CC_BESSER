@@ -9,6 +9,7 @@ modeling-agent/venv/
 # Environment variables (API keys, secrets)
 .env
 gemini_service/.env
+gemini_service/__pycache__/
 
 # IDE
 .vscode/
@@ -16,4 +17,4 @@ gemini_service/.env
 
 # OS
 .DS_Store
-Thumbs.db
+Thumbs.db

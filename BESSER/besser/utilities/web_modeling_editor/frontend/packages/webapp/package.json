@@ -42,7 +42,7 @@
     "styled-components": "^6.4.1",
     "stylis": "4.3.4",
     "uuid": "^14.0.0",
-    "webpack-dev-server": "^5.2.3",
+    "webpack-dev-server": "^1.16.5",
     "websocket": "1.0.35"
   },
   "devDependencies": {

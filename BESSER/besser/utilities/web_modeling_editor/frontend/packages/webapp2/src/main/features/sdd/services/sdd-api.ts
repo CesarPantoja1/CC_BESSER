@@ -47,7 +47,7 @@ export interface SpecFile {
 }
 
 export interface SddEvent {
-  type: 'phase_start' | 'output' | 'phase_complete' | 'error' | 'status' | 'specs' | 'process_done' | 'pong' | 'waiting_input' | 'session_ended' | 'render_diagram' | 'sync_result' | 'workspace_set';
+  type: 'phase_start' | 'output' | 'phase_complete' | 'error' | 'status' | 'specs' | 'process_done' | 'pong' | 'waiting_input' | 'session_ended' | 'render_diagram' | 'sync_result' | 'workspace_set' | 'export_result';
   phase?: string;
   data?: string;
   files?: string[];
@@ -287,5 +287,10 @@ export class SddWebSocket {
   /** Set the workspace folder for CC-SDD operations */
   setWorkspace(path: string): void {
     this.send({ action: 'set_workspace', path });
+  }
+
+  /** Export diagram.json to the BESSER editor canvas */
+  exportDiagramToEditor(feature?: string): void {
+    this.send({ action: 'export_diagram', feature });
   }
 }

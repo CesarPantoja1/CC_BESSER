@@ -232,6 +232,17 @@ export function SddPanel({ isOpen, onClose }: SddPanelProps) {
       return;
     }
 
+    // Explicit diagram export command
+    if (
+      lowerText.includes('exportar diagrama') ||
+      lowerText.includes('export diagram') ||
+      lowerText.includes('exportar al editor') ||
+      lowerText === 'exportar'
+    ) {
+      handleExportDiagram();
+      return;
+    }
+
     // Explicit diagram generation command
     if (
       lowerText.includes('generar diagrama') ||
@@ -331,6 +342,20 @@ export function SddPanel({ isOpen, onClose }: SddPanelProps) {
       window.removeEventListener('wme:sdd-model-response', onModelResponse);
     }, 3000);
   }, [state.isSyncing, state.isRunning, actions]);
+
+  /** Export diagram to editor */
+  const handleExportDiagram = useCallback(() => {
+    if (state.isRunning) return;
+
+    setChatMessages((prev) => [...prev, {
+      id: nextId(),
+      role: 'system',
+      content: '📤 Exportando diagrama al editor BESSER...',
+      timestamp: new Date(),
+    }]);
+
+    actions.exportDiagramToEditor();
+  }, [state.isRunning, actions]);
 
   // Show sync result as system message
   useEffect(() => {
@@ -453,7 +478,7 @@ export function SddPanel({ isOpen, onClose }: SddPanelProps) {
               Selecciona tu carpeta de trabajo y describe tu sistema.
             </p>
             <p className="text-[9px] text-muted-foreground mt-1">
-              Comandos: "requirements", "design", "tasks", "next", "generar diagrama"
+              Comandos: "requirements", "design", "tasks", "next", "generar diagrama", "exportar"
             </p>
             <p className="text-[9px] text-muted-foreground">
               Carpeta: "workspace C:\ruta" o usa el selector 📂
@@ -468,13 +493,26 @@ export function SddPanel({ isOpen, onClose }: SddPanelProps) {
 
       {/* Input area */}
       <div className="border-t border-border/30 bg-muted/10">
-        {/* Sync button */}
-        <div className="px-2 py-1.5 border-b border-border/20">
+        {/* Action buttons */}
+        <div className="px-2 py-1.5 border-b border-border/20 flex gap-1.5">
+          {/* Export to editor button */}
+          <button
+            type="button"
+            onClick={handleExportDiagram}
+            disabled={state.isRunning || !state.currentFeature}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600/80 to-indigo-600/80 hover:from-blue-500 hover:to-indigo-500 text-white text-[10px] font-semibold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            title="Cargar diagram.json en el editor BESSER"
+            id="sdd-export-diagram-btn"
+          >
+            📤 Exportar al Editor
+          </button>
+
+          {/* Sync button */}
           <button
             type="button"
             onClick={handleSyncDiagram}
             disabled={state.isSyncing || state.isRunning || !state.currentFeature}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 text-white text-[10px] font-semibold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 text-white text-[10px] font-semibold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
             title="Enviar el diagrama actual al servicio para sincronizar requisitos"
             id="sdd-sync-diagram-btn"
           >
@@ -484,7 +522,7 @@ export function SddPanel({ isOpen, onClose }: SddPanelProps) {
                 Sincronizando...
               </>
             ) : (
-              '🔄 Sincronizar Diagrama'
+              '🔄 Sincronizar'
             )}
           </button>
         </div>

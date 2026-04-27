@@ -209,7 +209,9 @@ def _check_agents_available() -> tuple[bool, str]:
 
 
 def _run_diagram_agents(feature: str, requirements_text: str):
-    """Run the LangGraph creator/reviewer pipeline. Returns SystemSpec dict."""
+    """Run the LangGraph creator/reviewer/traceability pipeline.
+    Returns dict with keys: spec (SystemSpec), traceability_md (markdown).
+    """
     from gemini_service.agents import run_diagram_pipeline
     return run_diagram_pipeline(feature, requirements_text)
 
@@ -416,6 +418,10 @@ async def handler(ws):
             elif action == "generate_diagram":
                 await _handle_generate_diagram(ws, msg)
 
+            # Export diagram to editor (read diagram.json and send to canvas)
+            elif action == "export_diagram":
+                await _handle_export_diagram(ws, msg)
+
             # Sync diagram (traceability)
             elif action == "sync_diagram":
                 await _handle_sync_diagram(ws, msg)
@@ -562,32 +568,48 @@ async def _try_generate_diagram(ws, feature: str) -> bool:
     await ws.send(json.dumps({
         "type": "output",
         "data": (
-            "\n🤖 Iniciando generación de Diagrama de Clases...\n"
-            "   Agente Creador → Agente Revisor (máx. 3 iteraciones)\n\n"
+            "\n🤖 Iniciando generación de Diagrama de Clases (dominio)...\n"
+            "   Agente Creador → Revisor Estructural → Revisor Trazabilidad\n\n"
         ),
     }))
 
     try:
-        diagram_spec = await asyncio.to_thread(
+        result = await asyncio.to_thread(
             _run_diagram_agents, feature, req_text,
         )
 
+        diagram_spec = result["spec"]
+        traceability_md = result.get("traceability_md", "")
+
         # Save diagram.json
-        diagram_path = WORK_DIR / ".kiro" / "specs" / feature / "diagram.json"
+        feature_dir = WORK_DIR / ".kiro" / "specs" / feature
+        feature_dir.mkdir(parents=True, exist_ok=True)
+
+        diagram_path = feature_dir / "diagram.json"
         diagram_path.write_text(
             json.dumps(diagram_spec, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
 
+        # Save traceability.md
+        if traceability_md:
+            trace_path = feature_dir / "traceability.md"
+            trace_path.write_text(traceability_md, encoding="utf-8")
+
         class_count = len(diagram_spec.get("classes", []))
         rel_count = len(diagram_spec.get("relationships", []))
+
+        trace_msg = ""
+        if traceability_md:
+            trace_msg = f"   🔗 Trazabilidad guardada en: .kiro/specs/{feature}/traceability.md\n"
 
         await ws.send(json.dumps({
             "type": "output",
             "data": (
-                f"\n✅ Diagrama generado exitosamente:\n"
+                f"\n✅ Diagrama de dominio generado exitosamente:\n"
                 f"   📊 {class_count} clases, {rel_count} relaciones\n"
                 f"   💾 Guardado en: .kiro/specs/{feature}/diagram.json\n"
+                f"{trace_msg}"
                 f"   🖼️ Inyectando en BESSER...\n\n"
             ),
         }))
@@ -658,6 +680,67 @@ async def _handle_generate_diagram(ws, msg: dict):
                 }))
             except Exception:
                 pass
+
+# ---------------------------------------------------------------------------
+# Export diagram to editor handler (NEW)
+# ---------------------------------------------------------------------------
+
+async def _handle_export_diagram(ws, msg: dict):
+    """Read diagram.json from disk and send it to the frontend canvas."""
+    global _current_feature
+
+    feature = msg.get("feature", "") or _current_feature
+    if not feature:
+        # Auto-discover
+        specs_dir = WORK_DIR / ".kiro" / "specs"
+        if specs_dir.exists():
+            for d in specs_dir.iterdir():
+                if d.is_dir() and (d / "diagram.json").exists():
+                    feature = d.name
+                    _current_feature = feature
+                    break
+
+    if not feature:
+        await ws.send(json.dumps({
+            "type": "output",
+            "data": "\n⚠️ No hay feature con diagram.json. Genera el diagrama primero.\n",
+        }))
+        return
+
+    diagram_path = WORK_DIR / ".kiro" / "specs" / feature / "diagram.json"
+    if not diagram_path.exists():
+        await ws.send(json.dumps({
+            "type": "output",
+            "data": (
+                f"\n⚠️ No se encontró diagram.json para '{feature}'.\n"
+                f"   Ejecuta primero la fase de diseño o escribe 'generar diagrama'.\n"
+            ),
+        }))
+        return
+
+    try:
+        diagram_spec = json.loads(diagram_path.read_text(encoding="utf-8"))
+        class_count = len(diagram_spec.get("classes", []))
+        rel_count = len(diagram_spec.get("relationships", []))
+
+        await ws.send(json.dumps({
+            "type": "output",
+            "data": (
+                f"\n📤 Exportando diagrama al editor BESSER...\n"
+                f"   📊 {class_count} clases, {rel_count} relaciones\n\n"
+            ),
+        }))
+
+        await ws.send(json.dumps({
+            "type": "render_diagram",
+            "systemSpec": diagram_spec,
+        }))
+
+    except Exception as exc:
+        await ws.send(json.dumps({
+            "type": "output",
+            "data": f"\n❌ Error leyendo diagram.json: {exc}\n",
+        }))
 
 
 # ---------------------------------------------------------------------------
